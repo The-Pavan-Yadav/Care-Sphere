@@ -582,10 +582,10 @@ function AdminLoginView({ onLogin }: { onLogin: () => void }) {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (identifier === "admin" && password === "admin") {
+    if (identifier === "9100" && password === "9100") {
       onLogin();
     } else {
-      setError("Invalid credentials. Try admin/admin");
+      setError("Invalid credentials. Try 9100/9100");
     }
   };
 
@@ -606,7 +606,7 @@ function AdminLoginView({ onLogin }: { onLogin: () => void }) {
               value={identifier}
               onChange={e => setIdentifier(e.target.value)}
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-sm focus:outline-none focus:border-blue-900 focus:bg-white transition-colors"
-              placeholder="e.g. admin"
+              placeholder="Enter Admin ID"
               required
             />
           </div>
@@ -617,7 +617,7 @@ function AdminLoginView({ onLogin }: { onLogin: () => void }) {
               value={password}
               onChange={e => setPassword(e.target.value)}
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-sm focus:outline-none focus:border-blue-900 focus:bg-white transition-colors"
-              placeholder="e.g. admin"
+              placeholder="Enter Passcode"
               required
             />
           </div>

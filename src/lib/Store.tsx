@@ -66,6 +66,9 @@ export type Doctor = {
   name: string;
   specialty: string;
   hospitalIds: string[];
+  phone?: string;
+  email?: string;
+  qualifications?: string;
 };
 
 export type Hospital = {
@@ -73,6 +76,11 @@ export type Hospital = {
   name: string;
   type: string;
   address: string;
+  registrationNumber?: string;
+  phone?: string;
+  email?: string;
+  departments?: string;
+  adminDetails?: string;
 };
 
 type StoreContextType = {
