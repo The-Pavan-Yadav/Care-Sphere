@@ -1,0 +1,8 @@
+{
+  "name": "CareSphere",
+  "description": "One Patient, One Lifelong Health Record. An enterprise unified healthcare platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
