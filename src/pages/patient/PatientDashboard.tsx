@@ -4,9 +4,13 @@ import { useSearchParams } from "react-router-dom";
 import { 
   LayoutDashboard, Clock, FileText, TestTube, Microscope, 
   Pill, Calendar, Building2, Shield, Settings, Share2, 
-  Activity, AlertCircle, LogIn, ShieldCheck, UserPlus, Fingerprint
+  Activity, AlertCircle, LogIn, ShieldCheck, UserPlus, Fingerprint,
+  CalendarCheck, CalendarPlus, CheckCircle2, Stethoscope, RefreshCw, XCircle
 } from "lucide-react";
-import { useStore, Patient } from "../../lib/Store";
+import { useStore, Patient, Appointment } from "../../lib/Store";
+import BookAppointmentFlow from "../../components/patient/BookAppointmentFlow";
+import RescheduleAppointmentModal from "../../components/patient/RescheduleAppointmentModal";
+import CancelAppointmentModal from "../../components/patient/CancelAppointmentModal";
 
 export default function PatientDashboard() {
   const { patients, addPatient } = useStore();
@@ -292,7 +296,7 @@ function DashboardLayout({ patient, onSignOut }: { patient: Patient, onSignOut: 
           {activeTab === 'scans' && <ReportsView patient={patient} filter="Scan" />}
           {activeTab === 'prescriptions' && <PrescriptionsView patient={patient} />}
           {activeTab === 'medications' && <MedicationsView patient={patient} />}
-          {activeTab === 'appointments' && <AppointmentsView />}
+          {activeTab === 'appointments' && <AppointmentsView patient={patient} />}
           {activeTab === 'providers' && <ProvidersView patient={patient} />}
           {activeTab === 'overview' && <HealthOverviewView patient={patient} />}
           {activeTab === 'insurance' && <InsuranceView patient={patient} />}
@@ -309,11 +313,17 @@ function DashboardLayout({ patient, onSignOut }: { patient: Patient, onSignOut: 
 // ==========================================
 
 function MainDashboardView({ patient, onNavigate }: { patient: Patient, onNavigate: (tab: TabID) => void }) {
-  const { vitals, encounters, medications } = useStore();
+  const { vitals, encounters, medications, appointments } = useStore();
   const patientVitals = vitals[patient.aadhaar];
   
   const myEncounters = useMemo(() => encounters.filter(e => e.patientAadhaar === patient.aadhaar).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [encounters, patient.aadhaar]);
   const myMedications = useMemo(() => medications.filter(m => m.patientAadhaar === patient.aadhaar), [medications, patient.aadhaar]);
+
+  const nextAppointment = useMemo(() => {
+    return appointments
+      .filter(a => a.patientAadhaar === patient.aadhaar && (a.status === 'Confirmed' || a.status === 'Rescheduled' || a.status === 'Pending'))
+      .sort((a, b) => new Date(`${a.date} ${a.time}`).getTime() - new Date(`${b.date} ${b.time}`).getTime())[0] || null;
+  }, [appointments, patient.aadhaar]);
 
   return (
     <div className="p-8">
@@ -397,13 +407,68 @@ function MainDashboardView({ patient, onNavigate }: { patient: Patient, onNaviga
 
         {/* Right Column (Sidebar Widgets) */}
         <div className="space-y-6">
-          <div className="border border-slate-200 bg-white rounded-sm shadow-sm p-6 text-center">
-             <div className="inline-flex items-center justify-center h-12 w-12 bg-blue-50 border border-blue-100 text-blue-900 rounded-full mb-4">
-               <Calendar className="h-5 w-5" />
-             </div>
-             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Upcoming Appointments</h3>
-             <p className="text-sm text-slate-500 mt-2 italic">No upcoming appointments scheduled.</p>
-          </div>
+          {nextAppointment ? (
+            <div className="border border-slate-200 bg-white rounded-sm shadow-sm p-5">
+              <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-blue-50 text-blue-900 rounded-sm">
+                    <Calendar className="h-4 w-4" />
+                  </div>
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Upcoming Visit</h3>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm ${
+                  nextAppointment.status === 'Confirmed' 
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                    : 'bg-blue-50 text-blue-700 border border-blue-200'
+                }`}>
+                  {nextAppointment.status}
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div className="bg-slate-50 p-3 rounded-sm border border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <p className="font-bold text-slate-900">{nextAppointment.doctorName}</p>
+                    <span className="text-[10px] font-mono text-slate-400">{nextAppointment.id}</span>
+                  </div>
+                  <p className="text-blue-900 font-semibold text-[11px] mt-0.5">{nextAppointment.doctorSpecialty}</p>
+                  <p className="text-slate-500 text-[11px] mt-1 line-clamp-1">{nextAppointment.hospitalName}</p>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1 px-0.5">
+                  <span className="text-slate-600 flex items-center gap-1 font-medium">
+                    <Calendar className="h-3.5 w-3.5 text-slate-400" /> {nextAppointment.date}
+                  </span>
+                  <span className="font-mono font-bold text-blue-900 flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-blue-900" /> {nextAppointment.time}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex gap-2">
+                <button 
+                  onClick={() => onNavigate('appointments')}
+                  className="flex-1 py-1.5 text-xs font-bold bg-blue-900 text-white rounded-sm hover:bg-blue-800 transition-colors text-center"
+                >
+                  Manage Appointments
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="border border-slate-200 bg-white rounded-sm shadow-sm p-6 text-center">
+              <div className="inline-flex items-center justify-center h-12 w-12 bg-blue-50 border border-blue-100 text-blue-900 rounded-full mb-3">
+                <Calendar className="h-5 w-5" />
+              </div>
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-1">Upcoming Appointments</h3>
+              <p className="text-xs text-slate-500 mb-4">No visits currently scheduled.</p>
+              <button
+                onClick={() => onNavigate('appointments')}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-900 text-white text-xs font-bold rounded-sm hover:bg-blue-800 transition-colors"
+              >
+                <CalendarPlus className="h-3.5 w-3.5" /> Book Appointment
+              </button>
+            </div>
+          )}
 
           <div className="border border-slate-200 bg-white rounded-sm shadow-sm">
             <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
@@ -651,15 +716,300 @@ function SettingsView({ patient }: { patient: Patient }) {
   );
 }
 
-function AppointmentsView() {
+function AppointmentsView({ patient }: { patient: Patient }) {
+  const { appointments } = useStore();
+  const [isBookingOpen, setIsBookingOpen] = useState(false);
+  const [rescheduleTarget, setRescheduleTarget] = useState<Appointment | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Appointment | null>(null);
+  const [activeFilter, setActiveFilter] = useState<'upcoming' | 'all' | 'past' | 'cancelled'>('upcoming');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const myAppointments = useMemo(() => {
+    return appointments.filter(a => a.patientAadhaar === patient.aadhaar);
+  }, [appointments, patient.aadhaar]);
+
+  const upcomingList = useMemo(() => {
+    return myAppointments
+      .filter(a => a.status === 'Confirmed' || a.status === 'Rescheduled' || a.status === 'Pending')
+      .sort((a, b) => new Date(`${a.date} ${a.time}`).getTime() - new Date(`${b.date} ${b.time}`).getTime());
+  }, [myAppointments]);
+
+  const pastList = useMemo(() => {
+    return myAppointments
+      .filter(a => a.status === 'Completed')
+      .sort((a, b) => new Date(`${b.date} ${b.time}`).getTime() - new Date(`${a.date} ${a.time}`).getTime());
+  }, [myAppointments]);
+
+  const cancelledList = useMemo(() => {
+    return myAppointments
+      .filter(a => a.status === 'Cancelled')
+      .sort((a, b) => new Date(`${b.date} ${b.time}`).getTime() - new Date(`${a.date} ${a.time}`).getTime());
+  }, [myAppointments]);
+
+  const displayedAppointments = useMemo(() => {
+    if (activeFilter === 'upcoming') return upcomingList;
+    if (activeFilter === 'past') return pastList;
+    if (activeFilter === 'cancelled') return cancelledList;
+    return [...myAppointments].sort((a, b) => new Date(`${b.date} ${b.time}`).getTime() - new Date(`${a.date} ${a.time}`).getTime());
+  }, [activeFilter, upcomingList, pastList, cancelledList, myAppointments]);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 5000);
+  };
+
   return (
-    <div className="p-8">
-      <div className="border border-slate-200 bg-white rounded-sm shadow-sm overflow-hidden">
-        <div className="border-b border-slate-200 bg-slate-50 px-5 py-4"><h2 className="text-base font-semibold text-slate-900">Upcoming Appointments</h2></div>
-        <div className="p-8 text-center">
-          <p className="text-sm text-slate-500">No upcoming appointments scheduled.</p>
+    <div className="p-8 space-y-6">
+      {/* Toast banner */}
+      {toastMessage && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-5 py-3 rounded-sm text-xs font-semibold flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <span>{toastMessage}</span>
+          </div>
+          <button onClick={() => setToastMessage(null)} className="text-emerald-700 hover:text-emerald-900">
+            &times;
+          </button>
         </div>
+      )}
+
+      {/* Top Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-200 bg-white p-6 rounded-sm shadow-sm">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-900">Appointments & Consultations</h2>
+            <span className="text-xs font-mono font-bold bg-blue-50 text-blue-900 px-2 py-0.5 rounded-sm border border-blue-100">
+              {upcomingList.length} Active
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Book visits with affiliated hospital doctors, review upcoming consultations, reschedule or cancel appointments.
+          </p>
+        </div>
+
+        <button
+          onClick={() => setIsBookingOpen(true)}
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-900 text-white text-xs font-bold rounded-sm hover:bg-blue-800 transition-colors shadow-xs shrink-0 cursor-pointer"
+        >
+          <CalendarPlus className="h-4 w-4" /> Book Appointment
+        </button>
       </div>
+
+      {/* Filter Tabs */}
+      <div className="border-b border-slate-200 flex items-center gap-2 text-xs font-semibold">
+        <button
+          onClick={() => setActiveFilter('upcoming')}
+          className={`pb-3 px-3 transition-colors border-b-2 flex items-center gap-1.5 ${
+            activeFilter === 'upcoming'
+              ? 'border-blue-900 text-blue-900'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <span>Upcoming & Active</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 text-blue-900">
+            {upcomingList.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveFilter('all')}
+          className={`pb-3 px-3 transition-colors border-b-2 flex items-center gap-1.5 ${
+            activeFilter === 'all'
+              ? 'border-blue-900 text-blue-900'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <span>All Bookings</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-600">
+            {myAppointments.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveFilter('past')}
+          className={`pb-3 px-3 transition-colors border-b-2 flex items-center gap-1.5 ${
+            activeFilter === 'past'
+              ? 'border-blue-900 text-blue-900'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <span>Completed</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-600">
+            {pastList.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveFilter('cancelled')}
+          className={`pb-3 px-3 transition-colors border-b-2 flex items-center gap-1.5 ${
+            activeFilter === 'cancelled'
+              ? 'border-blue-900 text-blue-900'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <span>Cancelled</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-600">
+            {cancelledList.length}
+          </span>
+        </button>
+      </div>
+
+      {/* Appointment Cards List */}
+      {displayedAppointments.length === 0 ? (
+        <div className="border border-slate-200 bg-white rounded-sm p-12 text-center shadow-sm">
+          <Calendar className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+          <h3 className="text-sm font-bold text-slate-700">No appointments found in this view</h3>
+          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            {activeFilter === 'upcoming'
+              ? "You do not have any upcoming doctor appointments scheduled."
+              : "No appointments match the selected filter category."}
+          </p>
+          <button
+            onClick={() => setIsBookingOpen(true)}
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-900 text-white text-xs font-bold rounded-sm hover:bg-blue-800 transition-colors"
+          >
+            <CalendarPlus className="h-3.5 w-3.5" /> Book Appointment Now
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {displayedAppointments.map((apt) => {
+            const isUpcoming = apt.status === 'Confirmed' || apt.status === 'Rescheduled' || apt.status === 'Pending';
+            const aptDate = new Date(apt.date + "T00:00:00");
+            const monthStr = aptDate.toLocaleDateString("en-US", { month: "short" });
+            const dayNum = aptDate.getDate();
+            const weekdayStr = aptDate.toLocaleDateString("en-US", { weekday: "short" });
+
+            return (
+              <div
+                key={apt.id}
+                className="border border-slate-200 bg-white rounded-sm shadow-sm p-5 hover:border-slate-300 transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-5"
+              >
+                {/* Left: Date tile */}
+                <div className="flex items-center gap-4 shrink-0">
+                  <div className="flex flex-col items-center justify-center h-18 w-18 bg-slate-50 border border-slate-200 rounded-sm text-center shrink-0">
+                    <span className="text-[10px] uppercase font-bold text-blue-900 tracking-wider">
+                      {monthStr}
+                    </span>
+                    <span className="text-2xl font-bold text-slate-900 leading-tight">
+                      {dayNum}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      {weekdayStr}
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-900">{apt.doctorName}</span>
+                      <span className="text-[10px] font-mono text-slate-400">ID: {apt.doctorId}</span>
+                    </div>
+                    <p className="text-xs font-bold text-blue-900 mt-0.5">{apt.doctorSpecialty}</p>
+                    <div className="flex items-center gap-2 text-xs text-slate-600 mt-1.5">
+                      <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span>{apt.hospitalName}</span>
+                      <span className="text-slate-300">|</span>
+                      <span className="font-mono text-slate-500 text-[11px]">{apt.hospitalId}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Middle: Details */}
+                <div className="flex-1 md:px-4 text-xs space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-700">Time:</span>
+                    <span className="font-mono font-bold text-blue-900 bg-blue-50 px-2 py-0.5 rounded-sm border border-blue-100">
+                      {apt.time}
+                    </span>
+                    <span className="text-slate-400">•</span>
+                    <span className="text-slate-600 font-medium">{apt.type}</span>
+                  </div>
+
+                  {apt.reason && (
+                    <p className="text-slate-500 text-[11px] line-clamp-1">
+                      <strong className="text-slate-600">Reason:</strong> {apt.reason}
+                    </p>
+                  )}
+
+                  {apt.status === 'Cancelled' && apt.cancelReason && (
+                    <p className="text-rose-600 text-[11px] italic">
+                      Cancelled: {apt.cancelReason}
+                    </p>
+                  )}
+
+                  <p className="text-[10px] font-mono text-slate-400">
+                    Appointment Ref: {apt.id}
+                  </p>
+                </div>
+
+                {/* Right: Status & Actions */}
+                <div className="flex flex-col sm:flex-row md:flex-col items-start md:items-end gap-3 w-full md:w-auto shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-sm border ${
+                    apt.status === 'Confirmed'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : apt.status === 'Rescheduled'
+                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                      : apt.status === 'Completed'
+                      ? 'bg-slate-100 text-slate-700 border-slate-200'
+                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}>
+                    {apt.status}
+                  </span>
+
+                  {isUpcoming && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setRescheduleTarget(apt)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-blue-900 border border-blue-200 bg-blue-50/50 hover:bg-blue-100/60 rounded-sm transition-colors cursor-pointer"
+                      >
+                        <RefreshCw className="h-3 w-3" /> Reschedule
+                      </button>
+
+                      <button
+                        onClick={() => setCancelTarget(apt)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-rose-700 border border-rose-200 bg-rose-50/50 hover:bg-rose-100/60 rounded-sm transition-colors cursor-pointer"
+                      >
+                        <XCircle className="h-3 w-3" /> Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Book Appointment Modal */}
+      <BookAppointmentFlow
+        patient={patient}
+        isOpen={isBookingOpen}
+        onClose={() => setIsBookingOpen(false)}
+        onSuccess={(newApt) => {
+          showToast(`Appointment successfully booked with ${newApt.doctorName} for ${newApt.date} at ${newApt.time}!`);
+          setActiveFilter('upcoming');
+        }}
+      />
+
+      {/* Reschedule Modal */}
+      <RescheduleAppointmentModal
+        appointment={rescheduleTarget}
+        isOpen={!!rescheduleTarget}
+        onClose={() => setRescheduleTarget(null)}
+        onSuccess={() => {
+          showToast("Appointment successfully rescheduled and updated in CareSphere.");
+        }}
+      />
+
+      {/* Cancel Modal */}
+      <CancelAppointmentModal
+        appointment={cancelTarget}
+        isOpen={!!cancelTarget}
+        onClose={() => setCancelTarget(null)}
+        onSuccess={() => {
+          showToast("Appointment has been cancelled.");
+        }}
+      />
     </div>
   );
 }

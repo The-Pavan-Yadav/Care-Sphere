@@ -1,12 +1,12 @@
 import React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { 
   Search, Calendar, Activity, Plus, 
   ChevronLeft, LayoutDashboard, UploadCloud, 
   ClipboardList, CheckCircle2, Clock, Building2, UserCircle, LogIn, Link as LinkIcon, UserPlus
 } from "lucide-react";
-import { useStore, Patient, Doctor, Hospital } from "../../lib/Store";
+import { useStore, Patient, Doctor, Hospital, Appointment } from "../../lib/Store";
 
 export default function ProviderDashboard() {
   const [authRole, setAuthRole] = useState<'none' | 'doctor' | 'hospital'>('none');
@@ -330,11 +330,18 @@ function LoginView({ onLoginDoctor, onLoginHospital }: { onLoginDoctor: (d: Doct
 // 2. HOSPITAL ADMIN WORKSPACE
 // ==========================================
 function HospitalAdminWorkspace({ hospital, onLogout }: { hospital: Hospital, onLogout: () => void }) {
-  const { doctors, linkDoctorToHospital, doctorRequests, updateDoctorRequest, updateDoctor } = useStore();
+  const { doctors, linkDoctorToHospital, doctorRequests, updateDoctorRequest, appointments } = useStore();
   const linkedDoctors = doctors.filter(d => d.hospitalIds.includes(hospital.hospitalId));
   
   // Pending Requests for this hospital
   const pendingRequests = doctorRequests.filter(req => req.hospitalId === hospital.hospitalId && req.status === 'Pending');
+
+  // Appointments for this hospital
+  const hospitalAppointments = useMemo(() => {
+    return appointments
+      .filter(a => a.hospitalId === hospital.hospitalId)
+      .sort((a, b) => new Date(`${b.date} ${b.time}`).getTime() - new Date(`${a.date} ${a.time}`).getTime());
+  }, [appointments, hospital.hospitalId]);
 
   const handleApprove = (req: any) => {
     updateDoctorRequest({ ...req, status: 'Approved' });
@@ -359,9 +366,54 @@ function HospitalAdminWorkspace({ hospital, onLogout }: { hospital: Hospital, on
 
       <div className="max-w-5xl mx-auto p-8 grid grid-cols-1 md:grid-cols-3 gap-8">
         
-        {/* Left Col: Roster & Requests */}
+        {/* Left Col: Roster, Requests & Appointments */}
         <div className="md:col-span-2 space-y-8">
           
+          {/* Facility Scheduled Appointments */}
+          <div className="bg-white border border-slate-200 rounded-sm shadow-sm overflow-hidden">
+            <div className="border-b border-slate-200 bg-slate-50 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-slate-900 flex items-center">
+                <Calendar className="mr-2 h-4 w-4 text-blue-900" /> Facility Patient Appointments
+              </h2>
+              <span className="text-xs font-bold text-slate-500 bg-slate-200 px-2 py-1 rounded-full">
+                {hospitalAppointments.length}
+              </span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {hospitalAppointments.length === 0 ? (
+                <div className="p-8 text-center text-sm text-slate-500">No patient appointments booked for this facility yet.</div>
+              ) : (
+                hospitalAppointments.map(apt => (
+                  <div key={apt.id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50 transition-colors">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-slate-900">{apt.patientName}</h4>
+                        <span className="text-xs font-mono text-slate-400">({apt.patientAadhaar})</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wider border ${
+                          apt.status === 'Confirmed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                          apt.status === 'Completed' ? 'bg-slate-100 text-slate-700 border-slate-200' :
+                          apt.status === 'Cancelled' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                          'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}>
+                          {apt.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-1">
+                        Doctor: <strong className="text-slate-900">{apt.doctorName}</strong> ({apt.doctorSpecialty})
+                      </p>
+                      {apt.reason && <p className="text-xs text-slate-400 mt-0.5 italic">Reason: {apt.reason}</p>}
+                    </div>
+
+                    <div className="text-left sm:text-right font-mono text-xs text-slate-700 shrink-0">
+                      <div className="font-bold text-blue-900">{apt.date}</div>
+                      <div className="text-slate-500">{apt.time}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
           {/* Doctor Requests */}
           <div className="bg-white border border-slate-200 rounded-sm shadow-sm overflow-hidden">
             <div className="border-b border-slate-200 bg-amber-50 px-6 py-4 flex items-center justify-between">
@@ -428,6 +480,10 @@ function HospitalAdminWorkspace({ hospital, onLogout }: { hospital: Hospital, on
                 <div className="h-1.5 w-1.5 rounded-full bg-blue-400 mt-1.5 mr-3 flex-shrink-0"></div>
                 <p className="text-sm text-slate-300"><span className="text-white font-medium">Roster Size:</span> {linkedDoctors.length} providers</p>
               </li>
+              <li className="flex items-start">
+                <div className="h-1.5 w-1.5 rounded-full bg-blue-400 mt-1.5 mr-3 flex-shrink-0"></div>
+                <p className="text-sm text-slate-300"><span className="text-white font-medium">Bookings:</span> {hospitalAppointments.length} scheduled visits</p>
+              </li>
             </ul>
           </div>
         </div>
@@ -439,12 +495,6 @@ function HospitalAdminWorkspace({ hospital, onLogout }: { hospital: Hospital, on
 // ==========================================
 // 3. DOCTOR WORKSPACE (Existing but integrated)
 // ==========================================
-const MOCK_DOCTOR_APPOINTMENTS = [
-  { id: 'APT-1', patientName: 'Sarah Jenkins', aadhaar: '8492-4910-8432', date: '2026-10-12', time: '09:00 AM', type: 'Follow-up', status: 'Scheduled' },
-  { id: 'APT-2', patientName: 'Arjun Patel', aadhaar: '9082-1102-5541', date: '2026-10-12', time: '10:30 AM', type: 'Consultation', status: 'Scheduled' },
-  { id: 'APT-3', patientName: 'Emily Chen', aadhaar: '1243-9821-0021', date: '2026-10-12', time: '02:00 PM', type: 'Lab Review', status: 'Scheduled' }
-];
-
 function DoctorWorkspace({ doctor, onLogout }: { doctor: Doctor, onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'appointments' | 'hospitals'>('dashboard');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -490,8 +540,8 @@ function DoctorWorkspace({ doctor, onLogout }: { doctor: Doctor, onLogout: () =>
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
         <div className="flex-1 overflow-y-auto p-8">
-          {activeTab === 'dashboard' && <DoctorHome onSelectPatient={setSelectedPatient} />}
-          {activeTab === 'appointments' && <DoctorAppointments onSelectPatient={setSelectedPatient} />}
+          {activeTab === 'dashboard' && <DoctorHome doctor={doctor} onSelectPatient={setSelectedPatient} />}
+          {activeTab === 'appointments' && <DoctorAppointments doctor={doctor} onSelectPatient={setSelectedPatient} />}
           {activeTab === 'hospitals' && <DoctorHospitals doctor={doctor} />}
         </div>
       </div>
@@ -500,11 +550,17 @@ function DoctorWorkspace({ doctor, onLogout }: { doctor: Doctor, onLogout: () =>
   );
 }
 
-function DoctorHome({ onSelectPatient }: { onSelectPatient: (p: Patient) => void }) {
-  const { patients } = useStore();
+function DoctorHome({ doctor, onSelectPatient }: { doctor: Doctor, onSelectPatient: (p: Patient) => void }) {
+  const { patients, appointments } = useStore();
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredPatients = patients.filter(p => p.aadhaar.includes(searchQuery) || p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  const doctorUpcomingAppointments = useMemo(() => {
+    return appointments
+      .filter(a => a.doctorId === doctor.medicalId && (a.status === 'Confirmed' || a.status === 'Rescheduled' || a.status === 'Pending'))
+      .sort((a, b) => new Date(`${a.date} ${a.time}`).getTime() - new Date(`${b.date} ${b.time}`).getTime());
+  }, [appointments, doctor.medicalId]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -545,78 +601,147 @@ function DoctorHome({ onSelectPatient }: { onSelectPatient: (p: Patient) => void
       {/* Appointments */}
       <div className="bg-white border border-slate-200 rounded-sm shadow-sm overflow-hidden">
         <div className="border-b border-slate-200 bg-slate-50 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 flex items-center"><Calendar className="mr-2 h-4 w-4 text-blue-900" /> Today's Appointments</h2>
+          <h2 className="text-base font-semibold text-slate-900 flex items-center">
+            <Calendar className="mr-2 h-4 w-4 text-blue-900" /> Upcoming Patient Consultations
+          </h2>
+          <span className="text-xs font-mono font-bold bg-blue-100 text-blue-900 px-2 py-0.5 rounded-sm">
+            {doctorUpcomingAppointments.length} Scheduled
+          </span>
         </div>
         <div className="divide-y divide-slate-100">
-          {MOCK_DOCTOR_APPOINTMENTS.map(apt => (
-            <div key={apt.id} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
-              <div className="flex items-center gap-6">
-                <div className="text-center w-24">
-                  <span className="block text-sm font-bold text-slate-900">{apt.time}</span>
-                  <span className="block text-xs text-slate-500 uppercase mt-0.5">{apt.type}</span>
-                </div>
-                <div className="w-px h-10 bg-slate-200"></div>
-                <div>
-                  <h4 className="text-base font-semibold text-slate-900">{apt.patientName}</h4>
-                  <p className="text-xs font-mono text-slate-500 mt-1">ID: {apt.aadhaar}</p>
-                </div>
-              </div>
-              <button onClick={() => { const patient = patients.find(p => p.aadhaar === apt.aadhaar); if (patient) onSelectPatient(patient); }} className="px-4 py-2 text-xs font-semibold text-blue-900 bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors rounded-sm">
-                Start Consultation
-              </button>
+          {doctorUpcomingAppointments.length === 0 ? (
+            <div className="p-8 text-center text-sm text-slate-500">
+              No appointments scheduled for this doctor.
             </div>
-          ))}
+          ) : (
+            doctorUpcomingAppointments.map(apt => (
+              <div key={apt.id} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                <div className="flex items-center gap-6">
+                  <div className="text-center w-28">
+                    <span className="block text-sm font-bold text-slate-900">{apt.time}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">{apt.date}</span>
+                  </div>
+                  <div className="w-px h-10 bg-slate-200"></div>
+                  <div>
+                    <h4 className="text-base font-semibold text-slate-900">{apt.patientName}</h4>
+                    <p className="text-xs font-mono text-slate-500 mt-0.5">ID: {apt.patientAadhaar} • {apt.hospitalName}</p>
+                    {apt.reason && <p className="text-xs text-slate-600 mt-1 italic">Reason: {apt.reason}</p>}
+                  </div>
+                </div>
+                <button 
+                  onClick={() => { 
+                    const patient = patients.find(p => p.aadhaar === apt.patientAadhaar); 
+                    if (patient) onSelectPatient(patient); 
+                  }} 
+                  className="px-4 py-2 text-xs font-semibold text-blue-900 bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors rounded-sm"
+                >
+                  Start Consultation
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function DoctorAppointments({ onSelectPatient }: { onSelectPatient: (p: Patient) => void }) {
-  const { patients } = useStore();
-  const [appointments, setAppointments] = useState(MOCK_DOCTOR_APPOINTMENTS);
+function DoctorAppointments({ doctor, onSelectPatient }: { doctor: Doctor, onSelectPatient: (p: Patient) => void }) {
+  const { patients, appointments, updateAppointment } = useStore();
 
-  const completeAppointment = (id: string) => setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'Completed' } : a));
+  const doctorAppointments = useMemo(() => {
+    return appointments
+      .filter(a => a.doctorId === doctor.medicalId)
+      .sort((a, b) => new Date(`${b.date} ${b.time}`).getTime() - new Date(`${a.date} ${a.time}`).getTime());
+  }, [appointments, doctor.medicalId]);
+
+  const handleComplete = async (apt: Appointment) => {
+    await updateAppointment({ ...apt, status: 'Completed' });
+  };
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Manage Appointments</h1>
-        <p className="text-sm text-slate-600 mt-1">View and manage your upcoming schedule.</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Manage Appointments</h1>
+          <p className="text-sm text-slate-600 mt-1">View and manage your consultation schedule across affiliated hospitals.</p>
+        </div>
+        <span className="text-xs font-mono font-bold bg-blue-50 text-blue-900 border border-blue-100 px-3 py-1 rounded-sm">
+          Total: {doctorAppointments.length}
+        </span>
       </div>
       <div className="bg-white border border-slate-200 rounded-sm shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase font-semibold text-slate-500">
               <tr>
-                <th className="px-6 py-4">Time</th>
+                <th className="px-6 py-4">Date & Time</th>
                 <th className="px-6 py-4">Patient</th>
+                <th className="px-6 py-4">Hospital</th>
                 <th className="px-6 py-4">Type</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
-              {appointments.map(apt => (
-                <tr key={apt.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-900">{apt.date} <span className="text-slate-400 mx-1">|</span> {apt.time}</td>
-                  <td className="px-6 py-4 font-medium text-slate-900">{apt.patientName}<br/><span className="text-xs font-mono text-slate-500 font-normal">{apt.aadhaar}</span></td>
-                  <td className="px-6 py-4">{apt.type}</td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-sm text-[10px] font-bold uppercase tracking-wider border ${apt.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                      {apt.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-                    {apt.status === 'Scheduled' && (
-                      <>
-                        <button onClick={() => completeAppointment(apt.id)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-300 hover:bg-slate-100 transition-colors rounded-sm inline-flex items-center"><CheckCircle2 className="mr-1 h-3 w-3" /> Mark Done</button>
-                        <button onClick={() => { const patient = patients.find(p => p.aadhaar === apt.aadhaar); if (patient) onSelectPatient(patient); }} className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 transition-colors rounded-sm">Open Chart</button>
-                      </>
-                    )}
+              {doctorAppointments.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-slate-500">
+                    No patient appointments recorded for this doctor.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                doctorAppointments.map(apt => (
+                  <tr key={apt.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-900">
+                      {apt.date} <span className="text-slate-400 mx-1">|</span> {apt.time}
+                    </td>
+                    <td className="px-6 py-4 font-medium text-slate-900">
+                      {apt.patientName}<br/>
+                      <span className="text-xs font-mono text-slate-500 font-normal">{apt.patientAadhaar}</span>
+                    </td>
+                    <td className="px-6 py-4 text-xs text-slate-600">
+                      <div className="font-semibold text-slate-800">{apt.hospitalName}</div>
+                      <div className="font-mono text-slate-400 text-[10px]">{apt.hospitalId}</div>
+                    </td>
+                    <td className="px-6 py-4 text-xs">{apt.type}</td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border ${
+                        apt.status === 'Completed'
+                          ? 'bg-green-50 text-green-700 border-green-200'
+                          : apt.status === 'Confirmed'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : apt.status === 'Rescheduled'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : apt.status === 'Cancelled'
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        {apt.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap">
+                      {(apt.status === 'Confirmed' || apt.status === 'Rescheduled' || apt.status === 'Pending') && (
+                        <button 
+                          onClick={() => handleComplete(apt)} 
+                          className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-300 hover:bg-slate-100 transition-colors rounded-sm inline-flex items-center"
+                        >
+                          <CheckCircle2 className="mr-1 h-3 w-3" /> Mark Done
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => { 
+                          const patient = patients.find(p => p.aadhaar === apt.patientAadhaar); 
+                          if (patient) onSelectPatient(patient); 
+                        }} 
+                        className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 transition-colors rounded-sm"
+                      >
+                        Open Chart
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

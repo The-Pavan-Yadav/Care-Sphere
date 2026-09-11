@@ -61,6 +61,25 @@ export type AuditLog = {
   details: string;
 };
 
+export type Appointment = {
+  id: string;
+  patientAadhaar: string;
+  patientName: string;
+  hospitalId: string;
+  hospitalName: string;
+  doctorId: string; // matches doctor.medicalId
+  doctorName: string;
+  doctorSpecialty?: string;
+  date: string; // YYYY-MM-DD
+  time: string; // e.g. "09:00 AM"
+  type: string; // e.g. "General Consultation", "Follow-up"
+  reason?: string;
+  status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Rescheduled' | 'Completed';
+  createdAt: string;
+  cancelledAt?: string;
+  cancelReason?: string;
+};
+
 export type DoctorRequest = {
   id: string;
   medicalId: string;
@@ -101,6 +120,7 @@ type StoreContextType = {
   conditions: Condition[];
   medications: Medication[];
   doctorRequests: DoctorRequest[];
+  appointments: Appointment[];
   vitals: Record<string, Vitals>; // Keyed by patientAadhaar
   auditLogs: AuditLog[];
   addPatient: (patient: Patient) => void;
@@ -114,6 +134,10 @@ type StoreContextType = {
   addEncounter: (encounter: Encounter) => void;
   addCondition: (condition: Condition) => void;
   addMedication: (medication: Medication) => void;
+  addAppointment: (appointment: Appointment) => Promise<void>;
+  updateAppointment: (appointment: Appointment) => Promise<void>;
+  cancelAppointment: (id: string, reason?: string) => Promise<void>;
+  rescheduleAppointment: (id: string, newDate: string, newTime: string) => Promise<void>;
   updateVitals: (vitals: Vitals) => void;
   logAction: (action: string, actor: string, details: string) => void;
 };
@@ -121,6 +145,40 @@ type StoreContextType = {
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 // Initial Demo Data
+const initialAppointments: Appointment[] = [
+  {
+    id: "APT-2026-101",
+    patientAadhaar: "8492-4910-8432",
+    patientName: "Sarah Jenkins",
+    hospitalId: "HOSP-001",
+    hospitalName: "City General Hospital",
+    doctorId: "PRV-1029",
+    doctorName: "Dr. Robert Smith",
+    doctorSpecialty: "Cardiology",
+    date: "2026-10-15",
+    time: "10:00 AM",
+    type: "Cardiology Follow-up",
+    reason: "Hypertension follow-up & ECG check",
+    status: "Confirmed",
+    createdAt: "2026-09-10T10:00:00Z"
+  },
+  {
+    id: "APT-2026-102",
+    patientAadhaar: "8492-4910-8432",
+    patientName: "Sarah Jenkins",
+    hospitalId: "HOSP-001",
+    hospitalName: "City General Hospital",
+    doctorId: "PRV-1030",
+    doctorName: "Dr. Emily Chen",
+    doctorSpecialty: "General Practice",
+    date: "2026-10-22",
+    time: "02:30 PM",
+    type: "General Consultation",
+    reason: "Routine quarterly wellness assessment",
+    status: "Confirmed",
+    createdAt: "2026-09-11T09:00:00Z"
+  }
+];
 const initialHospitals: Hospital[] = [
   {
     hospitalId: "HOSP-001",
@@ -238,6 +296,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [conditions, setConditions] = useState<Condition[]>([]);
   const [medications, setMedications] = useState<Medication[]>([]);
   const [doctorRequests, setDoctorRequests] = useState<DoctorRequest[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [vitals, setVitals] = useState<Record<string, Vitals>>({});
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isReady, setIsReady] = useState(false);
@@ -255,6 +314,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         unsubs.push(onSnapshot(collection(db, "encounters"), (snap) => setEncounters(snap.docs.map(d => d.data() as Encounter))));
         unsubs.push(onSnapshot(collection(db, "conditions"), (snap) => setConditions(snap.docs.map(d => d.data() as Condition))));
         unsubs.push(onSnapshot(collection(db, "medications"), (snap) => setMedications(snap.docs.map(d => d.data() as Medication))));
+        unsubs.push(onSnapshot(collection(db, "doctorRequests"), (snap) => setDoctorRequests(snap.docs.map(d => d.data() as DoctorRequest))));
+        unsubs.push(onSnapshot(collection(db, "appointments"), (snap) => setAppointments(snap.docs.map(d => d.data() as Appointment))));
         unsubs.push(onSnapshot(collection(db, "vitals"), (snap) => {
           const vMap: Record<string, Vitals> = {};
           snap.docs.forEach(d => {
@@ -274,8 +335,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           initialEncounters.forEach(e => setDoc(doc(db, "encounters", e.id), e));
           initialConditions.forEach(c => setDoc(doc(db, "conditions", c.id), c));
           initialMedications.forEach(m => setDoc(doc(db, "medications", m.id), m));
+          initialAppointments.forEach(a => setDoc(doc(db, "appointments", a.id), a));
           Object.values(initialVitals).forEach(v => setDoc(doc(db, "vitals", v.patientAadhaar), v));
           initialAuditLogs.forEach(l => setDoc(doc(db, "auditLogs", l.id), l));
+        } else {
+          // Check if appointments collection is initialized
+          const aSnap = await getDocs(collection(db, "appointments"));
+          if (aSnap.empty) {
+            initialAppointments.forEach(a => setDoc(doc(db, "appointments", a.id), a));
+          }
         }
 
         setIsReady(true);
@@ -356,6 +424,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     logAction("MEDICATION_ADD", medication.provider, `Prescribed medication for: ${medication.patientAadhaar}`);
   };
 
+  const addAppointment = async (appointment: Appointment) => {
+    await setDoc(doc(db, "appointments", appointment.id), appointment);
+    logAction("APPOINTMENT_BOOK", "Patient", `Booked appointment ${appointment.id} with ${appointment.doctorName} at ${appointment.hospitalName} on ${appointment.date} ${appointment.time}`);
+  };
+
+  const updateAppointment = async (appointment: Appointment) => {
+    await setDoc(doc(db, "appointments", appointment.id), appointment);
+    logAction("APPOINTMENT_UPDATE", "System", `Updated appointment: ${appointment.id}`);
+  };
+
+  const cancelAppointment = async (id: string, reason?: string) => {
+    const apt = appointments.find(a => a.id === id);
+    if (apt) {
+      const updated: Appointment = {
+        ...apt,
+        status: 'Cancelled',
+        cancelledAt: new Date().toISOString(),
+        cancelReason: reason || "Cancelled by patient"
+      };
+      await setDoc(doc(db, "appointments", id), updated);
+      logAction("APPOINTMENT_CANCEL", "Patient", `Cancelled appointment ${id} with ${apt.doctorName}`);
+    }
+  };
+
+  const rescheduleAppointment = async (id: string, newDate: string, newTime: string) => {
+    const apt = appointments.find(a => a.id === id);
+    if (apt) {
+      const updated: Appointment = {
+        ...apt,
+        date: newDate,
+        time: newTime,
+        status: 'Rescheduled'
+      };
+      await setDoc(doc(db, "appointments", id), updated);
+      logAction("APPOINTMENT_RESCHEDULE", "Patient", `Rescheduled appointment ${id} to ${newDate} at ${newTime}`);
+    }
+  };
+
   const updateVitals = async (newVitals: Vitals) => {
     await setDoc(doc(db, "vitals", newVitals.patientAadhaar), newVitals);
     logAction("VITALS_UPDATE", "Provider", `Updated vitals for: ${newVitals.patientAadhaar}`);
@@ -366,7 +472,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-        <StoreContext.Provider value={{
+    <StoreContext.Provider value={{
       patients,
       doctors,
       hospitals,
@@ -374,6 +480,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       conditions,
       medications,
       doctorRequests,
+      appointments,
       vitals,
       auditLogs,
       addPatient,
@@ -387,6 +494,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addEncounter,
       addCondition,
       addMedication,
+      addAppointment,
+      updateAppointment,
+      cancelAppointment,
+      rescheduleAppointment,
       updateVitals,
       logAction
     }}>
