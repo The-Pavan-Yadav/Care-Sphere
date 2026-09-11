@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Activity } from "lucide-react";
+import { Activity, QrCode } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 export default function Navbar() {
@@ -21,9 +21,15 @@ export default function Navbar() {
             <a href="#features" className="text-sm font-medium text-slate-600 hover:text-blue-900 transition-none">Features</a>
             <a href="#about" className="text-sm font-medium text-slate-600 hover:text-blue-900 transition-none">About</a>
             <a href="#contact" className="text-sm font-medium text-slate-600 hover:text-blue-900 transition-none">Contact</a>
+            <Link to="/verify-patient" className="text-xs font-bold text-blue-900 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-sm hover:bg-blue-100 transition-colors flex items-center gap-1.5">
+              <QrCode className="h-3.5 w-3.5" /> Verify Health QR
+            </Link>
           </div>
         ) : (
           <div className="flex items-center gap-4">
+            <Link to="/verify-patient" className="text-xs font-semibold text-blue-900 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-sm hover:bg-blue-100 transition-colors flex items-center gap-1.5">
+              <QrCode className="h-3.5 w-3.5" /> Scan QR
+            </Link>
             <Link to="/" className="text-sm font-medium text-slate-600 hover:text-blue-900 transition-none">
               Sign Out
             </Link>

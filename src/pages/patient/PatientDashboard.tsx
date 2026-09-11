@@ -5,12 +5,13 @@ import {
   LayoutDashboard, Clock, FileText, TestTube, Microscope, 
   Pill, Calendar, Building2, Shield, Settings, Share2, 
   Activity, AlertCircle, LogIn, ShieldCheck, UserPlus, Fingerprint,
-  CalendarCheck, CalendarPlus, CheckCircle2, Stethoscope, RefreshCw, XCircle
+  CalendarCheck, CalendarPlus, CheckCircle2, Stethoscope, RefreshCw, XCircle, QrCode
 } from "lucide-react";
 import { useStore, Patient, Appointment } from "../../lib/Store";
 import BookAppointmentFlow from "../../components/patient/BookAppointmentFlow";
 import RescheduleAppointmentModal from "../../components/patient/RescheduleAppointmentModal";
 import CancelAppointmentModal from "../../components/patient/CancelAppointmentModal";
+import MyHealthQrView from "../../components/patient/MyHealthQrView";
 
 export default function PatientDashboard() {
   const { patients, addPatient } = useStore();
@@ -206,15 +207,13 @@ function RegisterView({ onRegister, onGoToLogin }: { onRegister: (p: Patient) =>
 // ==========================================
 // DASHBOARD WORKSPACE
 // ==========================================
-type TabID = 'dashboard' | 'timeline' | 'records' | 'labs' | 'scans' | 'prescriptions' | 'medications' | 'appointments' | 'providers' | 'insurance' | 'settings';
+type TabID = 'dashboard' | 'timeline' | 'records' | 'labs' | 'scans' | 'prescriptions' | 'medications' | 'appointments' | 'providers' | 'qr' | 'insurance' | 'settings';
 
 function DashboardLayout({ patient, onSignOut }: { patient: Patient, onSignOut: () => void }) {
   const [activeTab, setActiveTab] = useState<TabID>('dashboard');
-  const [shareGranted, setShareGranted] = useState(false);
 
   const handleShare = () => {
-    setShareGranted(true);
-    setTimeout(() => setShareGranted(false), 3000);
+    setActiveTab('qr');
   };
 
   const navItems = [
@@ -227,48 +226,51 @@ function DashboardLayout({ patient, onSignOut }: { patient: Patient, onSignOut: 
     { id: 'medications' as TabID, label: 'Medications', icon: Pill },
     { id: 'appointments' as TabID, label: 'Appointments', icon: Calendar },
     { id: 'providers' as TabID, label: 'Doctors/Hospitals', icon: Building2 },
+    { id: 'qr' as TabID, label: 'My Health QR', icon: QrCode },
     { id: 'insurance' as TabID, label: 'Insurance', icon: Shield },
     { id: 'settings' as TabID, label: 'Settings', icon: Settings },
   ];
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] bg-slate-50 text-slate-900">
+    <div className="flex min-h-[calc(100vh-4rem)] bg-slate-50 text-slate-900 items-stretch">
       
       {/* Sidebar */}
-      <div className="w-64 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col hidden md:flex">
-        <div className="p-6 border-b border-slate-200 bg-slate-50/50">
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Active Patient</h2>
-          <p className="text-sm font-semibold text-slate-900">{patient.name}</p>
-        </div>
-        <nav className="flex-1 overflow-y-auto py-4">
-          <ul className="space-y-1">
-            {navItems.map(item => (
-              <li key={item.id}>
-                <button
-                  onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center px-6 py-2.5 text-sm font-medium transition-colors ${
-                    activeTab === item.id 
-                      ? 'bg-blue-50 text-blue-900 border-r-2 border-blue-900' 
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                >
-                  <item.icon className={`mr-3 h-4 w-4 ${activeTab === item.id ? 'text-blue-900' : 'text-slate-400'}`} />
-                  {item.label}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <div className="p-6 border-t border-slate-200 bg-slate-50/50">
-          <button onClick={onSignOut} className="w-full text-xs font-bold text-slate-600 border border-slate-300 bg-white hover:bg-slate-100 py-2 rounded-sm transition-colors">Sign Out</button>
+      <div className="w-64 flex-shrink-0 border-r border-slate-200 bg-white hidden md:block">
+        <div className="sticky top-16 h-[calc(100vh-4rem)] flex flex-col">
+          <div className="p-6 border-b border-slate-200 bg-slate-50/50">
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Active Patient</h2>
+            <p className="text-sm font-semibold text-slate-900">{patient.name}</p>
+          </div>
+          <nav className="flex-1 overflow-y-auto py-4">
+            <ul className="space-y-1">
+              {navItems.map(item => (
+                <li key={item.id}>
+                  <button
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center px-6 py-2.5 text-sm font-medium transition-colors ${
+                      activeTab === item.id 
+                        ? 'bg-blue-50 text-blue-900 border-r-2 border-blue-900' 
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <item.icon className={`mr-3 h-4 w-4 ${activeTab === item.id ? 'text-blue-900' : 'text-slate-400'}`} />
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <div className="p-6 border-t border-slate-200 bg-slate-50/50">
+            <button onClick={onSignOut} className="w-full text-xs font-bold text-slate-600 border border-slate-300 bg-white hover:bg-slate-100 py-2 rounded-sm transition-colors">Sign Out</button>
+          </div>
         </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0">
         
         {/* Top Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-8 py-5 flex-shrink-0">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-8 py-5 sticky top-16 z-10">
           <div>
             <h1 className="text-xl font-bold text-slate-900">{patient.name}</h1>
             <p className="text-sm text-slate-500 mt-0.5">
@@ -278,17 +280,15 @@ function DashboardLayout({ patient, onSignOut }: { patient: Patient, onSignOut: 
           <div className="flex items-center gap-4">
             <button 
               onClick={handleShare}
-              className={`flex items-center px-4 py-2 text-sm font-semibold rounded-sm transition-colors ${
-                shareGranted ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-blue-900 text-white hover:bg-blue-800'
-              }`}
+              className="flex items-center px-4 py-2 text-sm font-semibold rounded-sm transition-colors bg-blue-900 text-white hover:bg-blue-800 shadow-2xs"
             >
-              {shareGranted ? <><ShieldCheck className="mr-2 h-4 w-4" /> Provider Access Enabled</> : <><Share2 className="mr-2 h-4 w-4" /> Share / Grant Access</>}
+              <Share2 className="mr-2 h-4 w-4" /> Share / Grant Access
             </button>
           </div>
         </div>
 
-        {/* Scrollable Workspace */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Workspace */}
+        <div className="flex-1 pb-12">
           {activeTab === 'dashboard' && <MainDashboardView patient={patient} onNavigate={setActiveTab} />}
           {activeTab === 'timeline' && <TimelineView patient={patient} />}
           {activeTab === 'records' && <MedicalRecordsView patient={patient} />}
@@ -298,6 +298,7 @@ function DashboardLayout({ patient, onSignOut }: { patient: Patient, onSignOut: 
           {activeTab === 'medications' && <MedicationsView patient={patient} />}
           {activeTab === 'appointments' && <AppointmentsView patient={patient} />}
           {activeTab === 'providers' && <ProvidersView patient={patient} />}
+          {activeTab === 'qr' && <MyHealthQrView patient={patient} />}
           {activeTab === 'overview' && <HealthOverviewView patient={patient} />}
           {activeTab === 'insurance' && <InsuranceView patient={patient} />}
           {activeTab === 'settings' && <SettingsView patient={patient} />}
@@ -469,6 +470,36 @@ function MainDashboardView({ patient, onNavigate }: { patient: Patient, onNaviga
               </button>
             </div>
           )}
+
+          {/* Quick Health QR Widget */}
+          <div className="border-2 border-blue-900/20 bg-gradient-to-br from-blue-900 to-blue-950 text-white rounded-sm shadow-sm p-5">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-white/10 text-blue-200 rounded-sm">
+                  <QrCode className="h-4 w-4" />
+                </div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-blue-100">My Health QR</h3>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-sm font-semibold">
+                Active & Signed
+              </span>
+            </div>
+
+            <div className="py-4 text-center">
+              <p className="text-xs text-blue-200">Present this QR for secure front-desk verification at hospitals & clinics.</p>
+              <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-sm border border-white/10 font-mono text-xs">
+                <span className="text-blue-300">ID:</span>
+                <span className="font-bold">{patient.aadhaar}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => onNavigate('qr')}
+              className="w-full py-2 bg-white text-blue-950 text-xs font-bold rounded-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
+            >
+              <QrCode className="h-3.5 w-3.5" /> View Full QR & Permissions
+            </button>
+          </div>
 
           <div className="border border-slate-200 bg-white rounded-sm shadow-sm">
             <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">

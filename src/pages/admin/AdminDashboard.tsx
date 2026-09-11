@@ -22,39 +22,41 @@ function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<AdminTab>('analytics');
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] bg-slate-50 text-slate-900">
+    <div className="flex min-h-[calc(100vh-4rem)] bg-slate-50 text-slate-900 items-stretch">
       
       {/* Sidebar */}
-      <div className="w-64 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col hidden md:flex">
-        <div className="p-6 border-b border-slate-200 bg-slate-50/50">
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Government Portal</h2>
-          <p className="text-sm font-semibold text-slate-900 flex items-center">
-            <ShieldCheck className="mr-2 h-4 w-4 text-blue-900" /> System Admin
-          </p>
+      <div className="w-64 flex-shrink-0 border-r border-slate-200 bg-white hidden md:block">
+        <div className="sticky top-16 h-[calc(100vh-4rem)] flex flex-col">
+          <div className="p-6 border-b border-slate-200 bg-slate-50/50">
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Government Portal</h2>
+            <p className="text-sm font-semibold text-slate-900 flex items-center">
+              <ShieldCheck className="mr-2 h-4 w-4 text-blue-900" /> System Admin
+            </p>
+          </div>
+          <nav className="flex-1 overflow-y-auto py-4">
+            <ul className="space-y-1">
+              <SidebarItem active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} icon={LayoutDashboard} label="Health Analytics" />
+              
+              <div className="pt-4 pb-1 px-6"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Registries</p></div>
+              <SidebarItem active={activeTab === 'patients'} onClick={() => setActiveTab('patients')} icon={Users} label="Patients Registry" />
+              <SidebarItem active={activeTab === 'hospitals'} onClick={() => setActiveTab('hospitals')} icon={Building2} label="Hospital Management" />
+              <SidebarItem active={activeTab === 'doctors'} onClick={() => setActiveTab('doctors')} icon={Stethoscope} label="Doctor Verification" />
+              
+              <div className="pt-4 pb-1 px-6"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Clinical Data Oversight</p></div>
+              <SidebarItem active={activeTab === 'records'} onClick={() => setActiveTab('records')} icon={FileText} label="Medical Records" />
+              <SidebarItem active={activeTab === 'labs'} onClick={() => setActiveTab('labs')} icon={Microscope} label="Lab & Scan Reports" />
+              <SidebarItem active={activeTab === 'prescriptions'} onClick={() => setActiveTab('prescriptions')} icon={Pill} label="Prescriptions" />
+              
+              <div className="pt-4 pb-1 px-6"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Security & Compliance</p></div>
+              <SidebarItem active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} icon={Database} label="Audit Logs" />
+            </ul>
+          </nav>
         </div>
-        <nav className="flex-1 overflow-y-auto py-4">
-          <ul className="space-y-1">
-            <SidebarItem active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} icon={LayoutDashboard} label="Health Analytics" />
-            
-            <div className="pt-4 pb-1 px-6"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Registries</p></div>
-            <SidebarItem active={activeTab === 'patients'} onClick={() => setActiveTab('patients')} icon={Users} label="Patients Registry" />
-            <SidebarItem active={activeTab === 'hospitals'} onClick={() => setActiveTab('hospitals')} icon={Building2} label="Hospital Management" />
-            <SidebarItem active={activeTab === 'doctors'} onClick={() => setActiveTab('doctors')} icon={Stethoscope} label="Doctor Verification" />
-            
-            <div className="pt-4 pb-1 px-6"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Clinical Data Oversight</p></div>
-            <SidebarItem active={activeTab === 'records'} onClick={() => setActiveTab('records')} icon={FileText} label="Medical Records" />
-            <SidebarItem active={activeTab === 'labs'} onClick={() => setActiveTab('labs')} icon={Microscope} label="Lab & Scan Reports" />
-            <SidebarItem active={activeTab === 'prescriptions'} onClick={() => setActiveTab('prescriptions')} icon={Pill} label="Prescriptions" />
-            
-            <div className="pt-4 pb-1 px-6"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Security & Compliance</p></div>
-            <SidebarItem active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} icon={Database} label="Audit Logs" />
-          </ul>
-        </nav>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-8">
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 p-8 pb-12">
           <div className="max-w-6xl mx-auto">
             {activeTab === 'analytics' && <HealthAnalyticsView />}
             {activeTab === 'patients' && <PatientsRegistryView />}

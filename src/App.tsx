@@ -3,6 +3,7 @@ import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer";
 import LandingPage from "./pages/LandingPage";
 import PatientDashboard from "./pages/patient/PatientDashboard";
+import PatientVerificationPage from "./pages/patient/PatientVerificationPage";
 import ProviderDashboard from "./pages/provider/ProviderDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import { StoreProvider } from "./lib/Store";
@@ -17,6 +18,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/patient" element={<PatientDashboard />} />
+              <Route path="/verify-patient" element={<PatientVerificationPage />} />
               <Route path="/provider" element={<ProviderDashboard />} />
               <Route path="/admin" element={<AdminDashboard />} />
             </Routes>

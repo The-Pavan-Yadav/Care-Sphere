@@ -112,6 +112,33 @@ export type Hospital = {
   adminDetails?: string;
 };
 
+export type PatientQrToken = {
+  id: string; // Token ID e.g. "CSTOK-849249108432-9K2L"
+  tokenId: string;
+  patientAadhaar: string;
+  patientName: string;
+  status: 'Active' | 'Revoked';
+  createdAt: string;
+  updatedAt: string;
+  lastScannedAt?: string;
+  scanCount: number;
+  verificationEndpoint: string;
+};
+
+export type AccessPermission = {
+  id: string; // e.g. `PERM-${patientAadhaar}-${granteeId}`
+  patientAadhaar: string;
+  granteeId: string; // e.g. 'PRV-1029', 'HOSP-001', or 'ALL_AFFILIATED'
+  granteeName: string;
+  granteeType: 'Doctor' | 'Hospital' | 'All_Affiliated';
+  status: 'Active' | 'Pending' | 'Revoked';
+  accessLevel: 'Standard_Records' | 'Full_Chart' | 'Demographics_Only';
+  requestedAt?: string;
+  grantedAt?: string;
+  revokedAt?: string;
+  purpose?: string;
+};
+
 type StoreContextType = {
   patients: Patient[];
   doctors: Doctor[];
@@ -123,6 +150,8 @@ type StoreContextType = {
   appointments: Appointment[];
   vitals: Record<string, Vitals>; // Keyed by patientAadhaar
   auditLogs: AuditLog[];
+  patientQrTokens: PatientQrToken[];
+  accessPermissions: AccessPermission[];
   addPatient: (patient: Patient) => void;
   updatePatient: (patient: Patient) => void;
   addDoctorRequest: (req: DoctorRequest) => void;
@@ -140,6 +169,13 @@ type StoreContextType = {
   rescheduleAppointment: (id: string, newDate: string, newTime: string) => Promise<void>;
   updateVitals: (vitals: Vitals) => void;
   logAction: (action: string, actor: string, details: string) => void;
+  getOrCreateQrToken: (patient: Patient) => Promise<PatientQrToken>;
+  regenerateQrToken: (patient: Patient) => Promise<PatientQrToken>;
+  recordQrScan: (tokenId: string, scannerRole: string, scannerName: string) => Promise<void>;
+  grantAccess: (patientAadhaar: string, granteeId: string, granteeName: string, granteeType: 'Doctor' | 'Hospital' | 'All_Affiliated', accessLevel?: 'Standard_Records' | 'Full_Chart', purpose?: string) => Promise<void>;
+  revokeAccess: (permissionId: string) => Promise<void>;
+  requestAccess: (patientAadhaar: string, granteeId: string, granteeName: string, granteeType: 'Doctor' | 'Hospital', purpose: string) => Promise<void>;
+  hasAccess: (patientAadhaar: string, granteeId?: string) => boolean;
 };
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -288,6 +324,46 @@ const initialAuditLogs: AuditLog[] = [
   }
 ];
 
+const initialQrTokens: PatientQrToken[] = [
+  {
+    id: "CSTOK-849249108432-SECURE91",
+    tokenId: "CSTOK-849249108432-SECURE91",
+    patientAadhaar: "8492-4910-8432",
+    patientName: "Sarah Jenkins",
+    status: "Active",
+    createdAt: "2026-09-10T08:00:00Z",
+    updatedAt: "2026-09-11T09:30:00Z",
+    scanCount: 3,
+    lastScannedAt: "2026-09-11T10:15:00Z",
+    verificationEndpoint: "/verify-patient?token=CSTOK-849249108432-SECURE91"
+  }
+];
+
+const initialAccessPermissions: AccessPermission[] = [
+  {
+    id: "PERM-849249108432-PRV-1029",
+    patientAadhaar: "8492-4910-8432",
+    granteeId: "PRV-1029",
+    granteeName: "Dr. Robert Smith (Cardiology)",
+    granteeType: "Doctor",
+    status: "Active",
+    accessLevel: "Standard_Records",
+    grantedAt: "2026-09-10T10:00:00Z",
+    purpose: "Cardiology consult & ongoing monitoring"
+  },
+  {
+    id: "PERM-849249108432-HOSP-001",
+    patientAadhaar: "8492-4910-8432",
+    granteeId: "HOSP-001",
+    granteeName: "City General Hospital",
+    granteeType: "Hospital",
+    status: "Active",
+    accessLevel: "Standard_Records",
+    grantedAt: "2026-09-10T10:00:00Z",
+    purpose: "Outpatient clinical services"
+  }
+];
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -299,6 +375,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [vitals, setVitals] = useState<Record<string, Vitals>>({});
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [patientQrTokens, setPatientQrTokens] = useState<PatientQrToken[]>([]);
+  const [accessPermissions, setAccessPermissions] = useState<AccessPermission[]>([]);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -316,6 +394,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         unsubs.push(onSnapshot(collection(db, "medications"), (snap) => setMedications(snap.docs.map(d => d.data() as Medication))));
         unsubs.push(onSnapshot(collection(db, "doctorRequests"), (snap) => setDoctorRequests(snap.docs.map(d => d.data() as DoctorRequest))));
         unsubs.push(onSnapshot(collection(db, "appointments"), (snap) => setAppointments(snap.docs.map(d => d.data() as Appointment))));
+        unsubs.push(onSnapshot(collection(db, "patientQrTokens"), (snap) => setPatientQrTokens(snap.docs.map(d => d.data() as PatientQrToken))));
+        unsubs.push(onSnapshot(collection(db, "accessPermissions"), (snap) => setAccessPermissions(snap.docs.map(d => d.data() as AccessPermission))));
         unsubs.push(onSnapshot(collection(db, "vitals"), (snap) => {
           const vMap: Record<string, Vitals> = {};
           snap.docs.forEach(d => {
@@ -336,6 +416,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           initialConditions.forEach(c => setDoc(doc(db, "conditions", c.id), c));
           initialMedications.forEach(m => setDoc(doc(db, "medications", m.id), m));
           initialAppointments.forEach(a => setDoc(doc(db, "appointments", a.id), a));
+          initialQrTokens.forEach(t => setDoc(doc(db, "patientQrTokens", t.id), t));
+          initialAccessPermissions.forEach(p => setDoc(doc(db, "accessPermissions", p.id), p));
           Object.values(initialVitals).forEach(v => setDoc(doc(db, "vitals", v.patientAadhaar), v));
           initialAuditLogs.forEach(l => setDoc(doc(db, "auditLogs", l.id), l));
         } else {
@@ -343,6 +425,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const aSnap = await getDocs(collection(db, "appointments"));
           if (aSnap.empty) {
             initialAppointments.forEach(a => setDoc(doc(db, "appointments", a.id), a));
+          }
+          // Check if patientQrTokens collection is initialized
+          const qrSnap = await getDocs(collection(db, "patientQrTokens"));
+          if (qrSnap.empty) {
+            initialQrTokens.forEach(t => setDoc(doc(db, "patientQrTokens", t.id), t));
+          }
+          // Check if accessPermissions collection is initialized
+          const accSnap = await getDocs(collection(db, "accessPermissions"));
+          if (accSnap.empty) {
+            initialAccessPermissions.forEach(p => setDoc(doc(db, "accessPermissions", p.id), p));
           }
         }
 
@@ -467,6 +559,135 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     logAction("VITALS_UPDATE", "Provider", `Updated vitals for: ${newVitals.patientAadhaar}`);
   };
 
+  const getOrCreateQrToken = async (patient: Patient): Promise<PatientQrToken> => {
+    const existing = patientQrTokens.find(t => t.patientAadhaar === patient.aadhaar && t.status === 'Active');
+    if (existing) {
+      return existing;
+    }
+    const randPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const cleanAadhaar = patient.aadhaar.replace(/\D/g, '');
+    const tokenId = `CSTOK-${cleanAadhaar}-${randPart}`;
+    const newToken: PatientQrToken = {
+      id: tokenId,
+      tokenId: tokenId,
+      patientAadhaar: patient.aadhaar,
+      patientName: patient.name,
+      status: 'Active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      scanCount: 0,
+      verificationEndpoint: `/verify-patient?token=${tokenId}`
+    };
+    await setDoc(doc(db, "patientQrTokens", tokenId), newToken);
+    logAction("QR_TOKEN_GENERATED", "Patient", `Generated new Health QR token for ${patient.aadhaar}`);
+    return newToken;
+  };
+
+  const regenerateQrToken = async (patient: Patient): Promise<PatientQrToken> => {
+    const oldTokens = patientQrTokens.filter(t => t.patientAadhaar === patient.aadhaar && t.status === 'Active');
+    for (const old of oldTokens) {
+      await setDoc(doc(db, "patientQrTokens", old.id), { ...old, status: 'Revoked', updatedAt: new Date().toISOString() });
+    }
+    const randPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const cleanAadhaar = patient.aadhaar.replace(/\D/g, '');
+    const tokenId = `CSTOK-${cleanAadhaar}-${randPart}`;
+    const newToken: PatientQrToken = {
+      id: tokenId,
+      tokenId: tokenId,
+      patientAadhaar: patient.aadhaar,
+      patientName: patient.name,
+      status: 'Active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      scanCount: 0,
+      verificationEndpoint: `/verify-patient?token=${tokenId}`
+    };
+    await setDoc(doc(db, "patientQrTokens", tokenId), newToken);
+    logAction("QR_TOKEN_REGENERATED", "Patient", `Regenerated Health QR token for ${patient.aadhaar}. Previous tokens revoked.`);
+    return newToken;
+  };
+
+  const recordQrScan = async (tokenId: string, scannerRole: string, scannerName: string) => {
+    const token = patientQrTokens.find(t => t.tokenId === tokenId);
+    if (token) {
+      const updated: PatientQrToken = {
+        ...token,
+        scanCount: (token.scanCount || 0) + 1,
+        lastScannedAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, "patientQrTokens", tokenId), updated);
+      logAction("QR_SCAN_VERIFIED", `${scannerRole}: ${scannerName}`, `Verified patient QR token ${tokenId} for Aadhaar ${token.patientAadhaar}`);
+    }
+  };
+
+  const grantAccess = async (
+    patientAadhaar: string,
+    granteeId: string,
+    granteeName: string,
+    granteeType: 'Doctor' | 'Hospital' | 'All_Affiliated',
+    accessLevel: 'Standard_Records' | 'Full_Chart' = 'Standard_Records',
+    purpose?: string
+  ) => {
+    const id = `PERM-${patientAadhaar}-${granteeId}`;
+    const perm: AccessPermission = {
+      id,
+      patientAadhaar,
+      granteeId,
+      granteeName,
+      granteeType,
+      status: 'Active',
+      accessLevel,
+      grantedAt: new Date().toISOString(),
+      purpose: purpose || "Authorized by patient via CareSphere Portal"
+    };
+    await setDoc(doc(db, "accessPermissions", id), perm);
+    logAction("ACCESS_GRANTED", "Patient", `Granted ${accessLevel} to ${granteeName} (${granteeId})`);
+  };
+
+  const revokeAccess = async (permissionId: string) => {
+    const existing = accessPermissions.find(p => p.id === permissionId);
+    if (existing) {
+      const updated: AccessPermission = {
+        ...existing,
+        status: 'Revoked',
+        revokedAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, "accessPermissions", permissionId), updated);
+      logAction("ACCESS_REVOKED", "Patient", `Revoked access from ${existing.granteeName}`);
+    }
+  };
+
+  const requestAccess = async (
+    patientAadhaar: string,
+    granteeId: string,
+    granteeName: string,
+    granteeType: 'Doctor' | 'Hospital',
+    purpose: string
+  ) => {
+    const id = `PERM-${patientAadhaar}-${granteeId}`;
+    const perm: AccessPermission = {
+      id,
+      patientAadhaar,
+      granteeId,
+      granteeName,
+      granteeType,
+      status: 'Pending',
+      accessLevel: 'Standard_Records',
+      requestedAt: new Date().toISOString(),
+      purpose
+    };
+    await setDoc(doc(db, "accessPermissions", id), perm);
+    logAction("ACCESS_REQUESTED", `${granteeType}: ${granteeName}`, `Requested medical record access for ${patientAadhaar}. Purpose: ${purpose}`);
+  };
+
+  const hasAccess = (patientAadhaar: string, granteeId?: string): boolean => {
+    const allGrant = accessPermissions.find(p => p.patientAadhaar === patientAadhaar && p.granteeId === 'ALL_AFFILIATED' && p.status === 'Active');
+    if (allGrant) return true;
+    if (!granteeId) return false;
+    const specificGrant = accessPermissions.find(p => p.patientAadhaar === patientAadhaar && p.granteeId === granteeId && p.status === 'Active');
+    return !!specificGrant;
+  };
+
   if (!isReady) {
     return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50"><div className="w-8 h-8 border-4 border-blue-900 border-t-transparent rounded-full animate-spin mb-4"></div><p className="text-sm font-semibold text-slate-500 uppercase tracking-widest">Connecting to CareSphere...</p></div>;
   }
@@ -483,6 +704,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       appointments,
       vitals,
       auditLogs,
+      patientQrTokens,
+      accessPermissions,
       addPatient,
       updatePatient,
       addDoctorRequest,
@@ -499,7 +722,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       cancelAppointment,
       rescheduleAppointment,
       updateVitals,
-      logAction
+      logAction,
+      getOrCreateQrToken,
+      regenerateQrToken,
+      recordQrScan,
+      grantAccess,
+      revokeAccess,
+      requestAccess,
+      hasAccess
     }}>
       {children}
     </StoreContext.Provider>
