@@ -61,6 +61,16 @@ export type AuditLog = {
   details: string;
 };
 
+export type DoctorRequest = {
+  id: string;
+  medicalId: string;
+  hospitalId: string;
+  doctorName: string;
+  hospitalName: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  date: string;
+};
+
 export type Doctor = {
   medicalId: string;
   name: string;
@@ -90,9 +100,14 @@ type StoreContextType = {
   encounters: Encounter[];
   conditions: Condition[];
   medications: Medication[];
+  doctorRequests: DoctorRequest[];
   vitals: Record<string, Vitals>; // Keyed by patientAadhaar
   auditLogs: AuditLog[];
   addPatient: (patient: Patient) => void;
+  updatePatient: (patient: Patient) => void;
+  addDoctorRequest: (req: DoctorRequest) => void;
+  updateDoctorRequest: (req: DoctorRequest) => void;
+  updateDoctor: (doctor: Doctor) => void;
   addDoctor: (doctor: Doctor) => void;
   addHospital: (hospital: Hospital) => void;
   linkDoctorToHospital: (medicalId: string, hospitalId: string) => void;
@@ -222,6 +237,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [encounters, setEncounters] = useState<Encounter[]>([]);
   const [conditions, setConditions] = useState<Condition[]>([]);
   const [medications, setMedications] = useState<Medication[]>([]);
+  const [doctorRequests, setDoctorRequests] = useState<DoctorRequest[]>([]);
   const [vitals, setVitals] = useState<Record<string, Vitals>>({});
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isReady, setIsReady] = useState(false);
@@ -308,6 +324,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     logAction("PATIENT_REGISTER", "Patient", `Registered Aadhaar: ${patient.aadhaar}`);
   };
 
+  const updatePatient = async (patient: Patient) => {
+    await setDoc(doc(db, "patients", patient.aadhaar), patient);
+    logAction("PATIENT_UPDATE", "System", `Updated patient: ${patient.aadhaar}`);
+  };
+
+  const addDoctorRequest = async (req: DoctorRequest) => {
+    await setDoc(doc(db, "doctorRequests", req.id), req);
+  };
+
+  const updateDoctorRequest = async (req: DoctorRequest) => {
+    await setDoc(doc(db, "doctorRequests", req.id), req);
+  };
+
+  const updateDoctor = async (doctor: Doctor) => {
+    await setDoc(doc(db, "doctors", doctor.medicalId), doctor);
+  };
+
   const addEncounter = async (encounter: Encounter) => {
     await setDoc(doc(db, "encounters", encounter.id), encounter);
     logAction("ENCOUNTER_ADD", encounter.provider, `Added encounter for: ${encounter.patientAadhaar}`);
@@ -333,19 +366,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <StoreContext.Provider value={{
-
-
-
+        <StoreContext.Provider value={{
       patients,
       doctors,
       hospitals,
       encounters,
       conditions,
       medications,
+      doctorRequests,
       vitals,
       auditLogs,
       addPatient,
+      updatePatient,
+      addDoctorRequest,
+      updateDoctorRequest,
+      updateDoctor,
       addDoctor,
       addHospital,
       linkDoctorToHospital,

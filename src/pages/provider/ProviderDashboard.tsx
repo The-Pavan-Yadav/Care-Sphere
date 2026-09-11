@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { 
   Search, Calendar, Activity, Plus, 
   ChevronLeft, LayoutDashboard, UploadCloud, 
-  ClipboardList, CheckCircle2, Clock, Building2, UserCircle, LogIn, Link as LinkIcon
+  ClipboardList, CheckCircle2, Clock, Building2, UserCircle, LogIn, Link as LinkIcon, UserPlus
 } from "lucide-react";
 import { useStore, Patient, Doctor, Hospital } from "../../lib/Store";
 
@@ -330,26 +330,19 @@ function LoginView({ onLoginDoctor, onLoginHospital }: { onLoginDoctor: (d: Doct
 // 2. HOSPITAL ADMIN WORKSPACE
 // ==========================================
 function HospitalAdminWorkspace({ hospital, onLogout }: { hospital: Hospital, onLogout: () => void }) {
-  const { doctors, linkDoctorToHospital } = useStore();
+  const { doctors, linkDoctorToHospital, doctorRequests, updateDoctorRequest, updateDoctor } = useStore();
   const linkedDoctors = doctors.filter(d => d.hospitalIds.includes(hospital.hospitalId));
-  const [linkDocId, setLinkDocId] = useState("");
-  const [message, setMessage] = useState("");
+  
+  // Pending Requests for this hospital
+  const pendingRequests = doctorRequests.filter(req => req.hospitalId === hospital.hospitalId && req.status === 'Pending');
 
-  const handleLink = (e: React.FormEvent) => {
-    e.preventDefault();
-    const doc = doctors.find(d => d.medicalId === linkDocId);
-    if (!doc) {
-      setMessage("Error: Doctor not found in global registry.");
-      return;
-    }
-    if (doc.hospitalIds.includes(hospital.hospitalId)) {
-      setMessage("Doctor is already linked to this hospital.");
-      return;
-    }
-    linkDoctorToHospital(doc.medicalId, hospital.hospitalId);
-    setMessage(`Success: ${doc.name} linked to ${hospital.name}.`);
-    setLinkDocId("");
-    setTimeout(() => setMessage(""), 4000);
+  const handleApprove = (req: any) => {
+    updateDoctorRequest({ ...req, status: 'Approved' });
+    linkDoctorToHospital(req.medicalId, hospital.hospitalId);
+  };
+
+  const handleReject = (req: any) => {
+    updateDoctorRequest({ ...req, status: 'Rejected' });
   };
 
   return (
@@ -366,44 +359,78 @@ function HospitalAdminWorkspace({ hospital, onLogout }: { hospital: Hospital, on
 
       <div className="max-w-5xl mx-auto p-8 grid grid-cols-1 md:grid-cols-3 gap-8">
         
-        {/* Left Col: Roster */}
-        <div className="md:col-span-2 space-y-6">
+        {/* Left Col: Roster & Requests */}
+        <div className="md:col-span-2 space-y-8">
+          
+          {/* Doctor Requests */}
           <div className="bg-white border border-slate-200 rounded-sm shadow-sm overflow-hidden">
-            <div className="border-b border-slate-200 bg-slate-50 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-base font-bold text-slate-900 flex items-center">
-                <UserCircle className="mr-2 h-4 w-4 text-slate-500" /> Authorized Doctors
-              </h2>
-              <span className="text-xs font-mono bg-white border border-slate-200 px-2 py-0.5 rounded-sm">{linkedDoctors.length} TOTAL</span>
+            <div className="border-b border-slate-200 bg-amber-50 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-amber-900 flex items-center"><UserPlus className="mr-2 h-4 w-4 text-amber-600" /> Pending Doctor Requests</h2>
+              <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded-full">{pendingRequests.length}</span>
             </div>
             <div className="divide-y divide-slate-100">
-              {linkedDoctors.map(doc => (
-                <div key={doc.medicalId} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                  <div>
-                    <p className="text-sm font-bold text-slate-900">{doc.name}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">{doc.specialty}</p>
+              {pendingRequests.length === 0 ? (
+                <div className="p-6 text-center text-sm text-slate-500">No pending requests at this time.</div>
+              ) : (
+                pendingRequests.map(req => (
+                  <div key={req.id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white hover:bg-slate-50 transition-colors">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">{req.doctorName}</h4>
+                      <p className="text-xs text-slate-500 font-mono mt-0.5">Med ID: {req.medicalId}</p>
+                      <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">Requested: {new Date(req.date).toLocaleDateString()}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => handleReject(req)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-sm hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 transition-colors">Reject</button>
+                      <button onClick={() => handleApprove(req)} className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-900 rounded-sm hover:bg-blue-800 transition-colors">Approve Link</button>
+                    </div>
                   </div>
-                  <span className="text-xs font-mono text-slate-400 bg-slate-100 px-2 py-1 rounded-sm border border-slate-200">{doc.medicalId}</span>
-                </div>
-              ))}
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-sm shadow-sm overflow-hidden">
+            <div className="border-b border-slate-200 bg-slate-50 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-slate-900 flex items-center"><UserCircle className="mr-2 h-4 w-4 text-blue-900" /> Linked Doctors Roster</h2>
+              <span className="text-xs font-bold text-slate-500 bg-slate-200 px-2 py-1 rounded-full">{linkedDoctors.length}</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {linkedDoctors.length === 0 ? (
+                <div className="p-8 text-center text-sm text-slate-500">No doctors linked to this facility.</div>
+              ) : (
+                linkedDoctors.map(doc => (
+                  <div key={doc.medicalId} className="p-6 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">{doc.name}</h4>
+                      <p className="text-xs text-slate-500 font-mono mt-0.5">Med ID: {doc.medicalId} <span className="mx-2 text-slate-300">|</span> {doc.specialty}</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
 
-        {/* Right Col: Actions */}
+        {/* Right Col */}
         <div className="space-y-6">
-          <div className="bg-white border border-slate-200 rounded-sm shadow-sm p-6">
-            <h3 className="text-sm font-bold text-slate-900 mb-4 border-b border-slate-100 pb-2 flex items-center">
-              <LinkIcon className="mr-2 h-4 w-4 text-blue-900" /> Link New Doctor
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">Enter a doctor's Medical ID to authorize them for your hospital.</p>
-            <form onSubmit={handleLink} className="space-y-4">
-              <input type="text" value={linkDocId} onChange={e => setLinkDocId(e.target.value)} placeholder="Medical ID (e.g. PRV-1029)" className="w-full text-sm border border-slate-300 rounded-sm px-3 py-2 focus:border-blue-900 focus:ring-1 focus:ring-blue-900 font-mono" required />
-              <button type="submit" className="w-full text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 py-2.5 rounded-sm transition-colors">Authorize Doctor</button>
-            </form>
-            {message && <div className="mt-4 text-xs font-medium text-blue-900 bg-blue-50 border border-blue-100 p-2 rounded-sm">{message}</div>}
+          <div className="bg-slate-900 rounded-sm shadow-sm p-6 text-white">
+            <h3 className="text-sm font-bold mb-4 flex items-center"><Activity className="mr-2 h-4 w-4 text-blue-400" /> Hospital Overview</h3>
+            <ul className="space-y-3">
+              <li className="flex items-start">
+                <div className="h-1.5 w-1.5 rounded-full bg-blue-400 mt-1.5 mr-3 flex-shrink-0"></div>
+                <p className="text-sm text-slate-300"><span className="text-white font-medium">Type:</span> {hospital.type}</p>
+              </li>
+              <li className="flex items-start">
+                <div className="h-1.5 w-1.5 rounded-full bg-blue-400 mt-1.5 mr-3 flex-shrink-0"></div>
+                <p className="text-sm text-slate-300"><span className="text-white font-medium">Location:</span> {hospital.address}</p>
+              </li>
+              <li className="flex items-start">
+                <div className="h-1.5 w-1.5 rounded-full bg-blue-400 mt-1.5 mr-3 flex-shrink-0"></div>
+                <p className="text-sm text-slate-300"><span className="text-white font-medium">Roster Size:</span> {linkedDoctors.length} providers</p>
+              </li>
+            </ul>
           </div>
         </div>
-
       </div>
     </div>
   );
@@ -419,7 +446,7 @@ const MOCK_DOCTOR_APPOINTMENTS = [
 ];
 
 function DoctorWorkspace({ doctor, onLogout }: { doctor: Doctor, onLogout: () => void }) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'appointments'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'appointments' | 'hospitals'>('dashboard');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
   if (selectedPatient) {
@@ -448,6 +475,11 @@ function DoctorWorkspace({ doctor, onLogout }: { doctor: Doctor, onLogout: () =>
                 <Calendar className={`mr-3 h-4 w-4 ${activeTab === 'appointments' ? 'text-blue-900' : 'text-slate-400'}`} /> Appointments
               </button>
             </li>
+            <li>
+              <button onClick={() => setActiveTab('hospitals')} className={`w-full flex items-center px-6 py-2.5 text-sm font-medium transition-colors ${ activeTab === 'hospitals' ? 'bg-blue-50 text-blue-900 border-r-2 border-blue-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900' }`}>
+                <Building2 className={`mr-3 h-4 w-4 ${activeTab === 'hospitals' ? 'text-blue-900' : 'text-slate-400'}`} /> My Hospitals
+              </button>
+            </li>
           </ul>
         </nav>
         <div className="p-6 border-t border-slate-200 bg-slate-50/50">
@@ -460,6 +492,7 @@ function DoctorWorkspace({ doctor, onLogout }: { doctor: Doctor, onLogout: () =>
         <div className="flex-1 overflow-y-auto p-8">
           {activeTab === 'dashboard' && <DoctorHome onSelectPatient={setSelectedPatient} />}
           {activeTab === 'appointments' && <DoctorAppointments onSelectPatient={setSelectedPatient} />}
+          {activeTab === 'hospitals' && <DoctorHospitals doctor={doctor} />}
         </div>
       </div>
 
@@ -595,13 +628,13 @@ function DoctorAppointments({ onSelectPatient }: { onSelectPatient: (p: Patient)
 // ==========================================
 // 4. CLINICAL WORKSPACE
 // ==========================================
-function ClinicalWorkspace({ patient, doctor, onBack }: { patient: Patient, doctor: Doctor, onBack: () => void }) {
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'overview' | 'history' | 'consultation' | 'upload'>('overview');
-  const { vitals } = useStore();
-  const patientVitals = vitals[patient.aadhaar];
 
+function ClinicalWorkspace({ patient, doctor, onBack }: { patient: Patient, doctor: Doctor, onBack: () => void }) {
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'overview' | 'history' | 'add_record'>('overview');
+  
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-50 text-slate-900">
+      {/* Header */}
       <div className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-6">
           <button onClick={onBack} className="p-2 border border-slate-200 rounded-sm hover:bg-slate-50 transition-colors text-slate-600"><ChevronLeft className="h-5 w-5" /></button>
@@ -610,33 +643,22 @@ function ClinicalWorkspace({ patient, doctor, onBack }: { patient: Patient, doct
               <h1 className="text-xl font-bold text-slate-900">{patient.name}</h1>
               <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-900 text-xs font-mono font-semibold rounded-sm">ID: {patient.aadhaar}</span>
             </div>
+            <p className="text-xs text-slate-500 mt-1">DOB: {patient.dob} | Blood: {patient.bloodGroup}</p>
           </div>
         </div>
         
         <div className="flex bg-slate-100 p-1 rounded-sm border border-slate-200">
           <WorkspaceTab active={activeWorkspaceTab === 'overview'} onClick={() => setActiveWorkspaceTab('overview')} icon={Activity} label="Overview" />
-          <WorkspaceTab active={activeWorkspaceTab === 'history'} onClick={() => setActiveWorkspaceTab('history')} icon={Clock} label="History" />
-          <WorkspaceTab active={activeWorkspaceTab === 'consultation'} onClick={() => setActiveWorkspaceTab('consultation')} icon={ClipboardList} label="Consultation" />
-          <WorkspaceTab active={activeWorkspaceTab === 'upload'} onClick={() => setActiveWorkspaceTab('upload')} icon={UploadCloud} label="Upload" />
+          <WorkspaceTab active={activeWorkspaceTab === 'history'} onClick={() => setActiveWorkspaceTab('history')} icon={Clock} label="Health Timeline" />
+          <WorkspaceTab active={activeWorkspaceTab === 'add_record'} onClick={() => setActiveWorkspaceTab('add_record')} icon={Plus} label="Add Record" />
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-5xl mx-auto">
-          {activeWorkspaceTab === 'overview' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="border border-slate-200 bg-white rounded-sm shadow-sm p-6">
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Latest Vitals</h3>
-                <div className="grid grid-cols-2 gap-6">
-                  <div><p className="text-xs font-semibold text-slate-500 uppercase">Blood Pressure</p><p className="text-lg font-bold text-slate-900 mt-1">{patientVitals?.bloodPressure || "--"}</p></div>
-                  <div><p className="text-xs font-semibold text-slate-500 uppercase">Heart Rate</p><p className="text-lg font-bold text-slate-900 mt-1">{patientVitals ? `${patientVitals.heartRate} bpm` : "--"}</p></div>
-                </div>
-              </div>
-            </div>
-          )}
+          {activeWorkspaceTab === 'overview' && <ClinicalOverview patient={patient} />}
           {activeWorkspaceTab === 'history' && <PatientHistoryView patient={patient} />}
-          {activeWorkspaceTab === 'consultation' && <RecordConsultationView patient={patient} doctor={doctor} onSuccess={() => setActiveWorkspaceTab('history')} />}
-          {activeWorkspaceTab === 'upload' && <UploadReportView patient={patient} doctor={doctor} onSuccess={() => setActiveWorkspaceTab('history')} />}
+          {activeWorkspaceTab === 'add_record' && <AddRecordView patient={patient} doctor={doctor} onSuccess={() => setActiveWorkspaceTab('history')} />}
         </div>
       </div>
     </div>
@@ -645,9 +667,140 @@ function ClinicalWorkspace({ patient, doctor, onBack }: { patient: Patient, doct
 
 function WorkspaceTab({ active, onClick, icon: Icon, label }: { active: boolean, onClick: () => void, icon: any, label: string }) {
   return (
-    <button onClick={onClick} className={`flex items-center px-4 py-2 text-sm font-semibold rounded-sm transition-all ${ active ? 'bg-white text-blue-900 shadow-sm border border-slate-200/60' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent' }`}>
+    <button
+      onClick={onClick}
+      className={`flex items-center px-4 py-2 text-sm font-semibold rounded-sm transition-colors ${
+        active ? 'bg-white text-blue-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'
+      }`}
+    >
       <Icon className="mr-2 h-4 w-4" /> {label}
     </button>
+  );
+}
+
+function ClinicalOverview({ patient }: { patient: Patient }) {
+  const { vitals, conditions, updateVitals, updatePatient } = useStore();
+  const patientVitals = vitals[patient.aadhaar];
+  
+  const [editingVitals, setEditingVitals] = useState(false);
+  const [vitalsData, setVitalsData] = useState({ bloodPressure: patientVitals?.bloodPressure || '', heartRate: patientVitals?.heartRate || '', weight: patientVitals?.weight || '', height: patientVitals?.height || '' });
+  
+  const [editingAllergies, setEditingAllergies] = useState(false);
+  const [allergiesText, setAllergiesText] = useState(patient.allergies || 'None');
+
+  const myConditions = conditions.filter(c => c.patientAadhaar === patient.aadhaar && c.status === 'Active');
+
+  const handleSaveVitals = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateVitals({
+      id: `VIT-${Date.now()}`,
+      patientAadhaar: patient.aadhaar,
+      bloodPressure: vitalsData.bloodPressure,
+      heartRate: vitalsData.heartRate,
+      weight: vitalsData.weight,
+      height: vitalsData.height,
+      updatedAt: new Date().toISOString()
+    });
+    setEditingVitals(false);
+  };
+
+  const handleSaveAllergies = (e: React.FormEvent) => {
+    e.preventDefault();
+    updatePatient({ ...patient, allergies: allergiesText });
+    setEditingAllergies(false);
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Vitals */}
+      <div className="bg-white border border-slate-200 rounded-sm shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
+          <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Current Vitals</h3>
+          {!editingVitals && (
+            <button onClick={() => setEditingVitals(true)} className="text-xs font-semibold text-blue-900 hover:underline border border-blue-200 bg-blue-50 px-3 py-1 rounded-sm">Update Vitals</button>
+          )}
+        </div>
+        
+        {editingVitals ? (
+          <form onSubmit={handleSaveVitals} className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Blood Pressure</label>
+                <input required type="text" value={vitalsData.bloodPressure} onChange={e => setVitalsData({...vitalsData, bloodPressure: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-sm text-sm" placeholder="120/80" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Heart Rate (bpm)</label>
+                <input required type="text" value={vitalsData.heartRate} onChange={e => setVitalsData({...vitalsData, heartRate: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-sm text-sm" placeholder="72" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Weight</label>
+                <input required type="text" value={vitalsData.weight} onChange={e => setVitalsData({...vitalsData, weight: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-sm text-sm" placeholder="70 kg" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Height</label>
+                <input required type="text" value={vitalsData.height} onChange={e => setVitalsData({...vitalsData, height: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-sm text-sm" placeholder="175 cm" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setEditingVitals(false)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-sm hover:bg-slate-50 transition-colors">Cancel</button>
+              <button type="submit" className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-900 rounded-sm hover:bg-blue-800 transition-colors">Save Vitals</button>
+            </div>
+          </form>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+            <div><p className="text-xs font-semibold text-slate-500 uppercase">Blood Pressure</p><p className="text-lg font-bold text-slate-900 mt-1">{patientVitals?.bloodPressure || "--"}</p></div>
+            <div><p className="text-xs font-semibold text-slate-500 uppercase">Heart Rate</p><p className="text-lg font-bold text-slate-900 mt-1">{patientVitals ? `${patientVitals.heartRate} bpm` : "--"}</p></div>
+            <div><p className="text-xs font-semibold text-slate-500 uppercase">Weight</p><p className="text-lg font-bold text-slate-900 mt-1">{patientVitals?.weight || "--"}</p></div>
+            <div><p className="text-xs font-semibold text-slate-500 uppercase">Height</p><p className="text-lg font-bold text-slate-900 mt-1">{patientVitals?.height || "--"}</p></div>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Conditions */}
+        <div className="bg-white border border-slate-200 rounded-sm shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Active Conditions</h3>
+          </div>
+          {myConditions.length > 0 ? (
+            <ul className="space-y-3">
+              {myConditions.map(c => (
+                <li key={c.id} className="flex justify-between items-start">
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">{c.title}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Onset: {new Date(c.onset).toLocaleDateString()}</p>
+                  </div>
+                  <span className="text-[10px] px-2 py-1 bg-rose-50 text-rose-700 font-bold uppercase tracking-wider rounded-sm">Active</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500 italic">No active conditions.</p>
+          )}
+        </div>
+
+        {/* Allergies */}
+        <div className="bg-white border border-slate-200 rounded-sm shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Allergies</h3>
+            {!editingAllergies && (
+              <button onClick={() => setEditingAllergies(true)} className="text-xs font-semibold text-amber-900 border border-amber-200 bg-amber-50 px-3 py-1 rounded-sm hover:underline">Edit Allergies</button>
+            )}
+          </div>
+          {editingAllergies ? (
+            <form onSubmit={handleSaveAllergies} className="space-y-3">
+              <input type="text" value={allergiesText} onChange={e => setAllergiesText(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-sm text-sm" placeholder="e.g. Penicillin, Peanuts" />
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setEditingAllergies(false)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-sm hover:bg-slate-50">Cancel</button>
+                <button type="submit" className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-900 rounded-sm hover:bg-blue-800">Save</button>
+              </div>
+            </form>
+          ) : (
+            <p className="text-sm font-medium text-amber-900">{patient.allergies || 'None reported'}</p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -656,15 +809,15 @@ function PatientHistoryView({ patient }: { patient: Patient }) {
   const patientEncounters = encounters.filter(e => e.patientAadhaar === patient.aadhaar).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
-    <div className="bg-white border border-slate-200 rounded-sm shadow-sm p-8">
-      <h2 className="text-lg font-bold text-slate-900 mb-6">Patient Clinical History</h2>
+    <div className="bg-white border border-slate-200 rounded-sm shadow-sm p-8 animate-in fade-in duration-500">
+      <h2 className="text-lg font-bold text-slate-900 mb-6">Lifelong Health Timeline</h2>
       {patientEncounters.length === 0 ? (
         <div className="text-center py-12 text-slate-500 text-sm border-2 border-dashed border-slate-200 rounded-sm">No historical records found.</div>
       ) : (
         <div className="relative border-l border-slate-200 ml-4 space-y-8 py-4">
           {patientEncounters.map((enc) => (
             <div key={enc.id} className="relative pl-8">
-              <span className="absolute -left-2 top-1 h-4 w-4 rounded-full border-2 border-white bg-slate-300"></span>
+              <span className="absolute -left-2 top-1 h-4 w-4 rounded-full border-2 border-white bg-blue-900"></span>
               <div className="bg-slate-50 border border-slate-200 p-5 rounded-sm">
                 <div className="flex items-start justify-between">
                   <div>
@@ -672,10 +825,18 @@ function PatientHistoryView({ patient }: { patient: Patient }) {
                   </div>
                   <span className="text-sm font-mono font-medium text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded-sm">{enc.date}</span>
                 </div>
-                <p className="text-sm font-medium text-blue-900 mt-2">{enc.provider} <span className="mx-2 text-slate-300">|</span> {enc.facility}</p>
-                <div className="mt-4 bg-white border border-slate-200 p-4 rounded-sm">
-                  <p className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">{enc.notes}</p>
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase">Provider / Facility</p>
+                    <p className="text-sm text-slate-800 mt-0.5">{enc.provider} &bull; {enc.facility}</p>
+                  </div>
                 </div>
+                {enc.notes && (
+                  <div className="mt-4 pt-4 border-t border-slate-200">
+                    <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Clinical Notes / Details</p>
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{enc.notes}</p>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -685,56 +846,117 @@ function PatientHistoryView({ patient }: { patient: Patient }) {
   );
 }
 
-function RecordConsultationView({ patient, doctor, onSuccess }: { patient: Patient, doctor: Doctor, onSuccess: () => void }) {
+function AddRecordView({ patient, doctor, onSuccess }: { patient: Patient, doctor: Doctor, onSuccess: () => void }) {
   const { addEncounter, addCondition, addMedication, hospitals } = useStore();
+  const [recordType, setRecordType] = useState('Clinical Consultation');
   
-  // Resolve doctor's linked hospital names
   const linkedHospitals = doctor.hospitalIds.map(id => {
     const h = hospitals.find(x => x.hospitalId === id);
     return h ? h.name : "Unknown Facility";
   });
-  
-  const [formData, setFormData] = useState({ title: '', notes: '', diagnosis: '', rxName: '', rxDosage: '', facility: linkedHospitals[0] || 'Independent Practice' });
+
+  const [formData, setFormData] = useState({ 
+    title: '', notes: '', diagnosis: '', rxName: '', rxDosage: '', facility: linkedHospitals[0] || 'Independent Practice' 
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title || !formData.notes) return;
     const dateStr = new Date().toISOString().split('T')[0];
-
-    addEncounter({ id: `ENC-${Date.now()}`, patientAadhaar: patient.aadhaar, date: dateStr, title: formData.title, provider: doctor.name, facility: formData.facility, notes: formData.notes });
-    if (formData.diagnosis) addCondition({ id: `COND-${Date.now()}`, patientAadhaar: patient.aadhaar, title: formData.diagnosis, onset: dateStr, status: 'Active' });
-    if (formData.rxName) addMedication({ id: `MED-${Date.now()}`, patientAadhaar: patient.aadhaar, name: formData.rxName, dosage: formData.rxDosage || 'As directed', provider: doctor.name });
     
+    // Auto-prefix title based on type to aid Patient Portal filtering
+    let finalTitle = formData.title;
+    if (recordType === 'Lab Report' && !finalTitle.toLowerCase().includes('lab')) finalTitle = `Lab Report: ${finalTitle}`;
+    if (recordType === 'Scan Report' && !finalTitle.toLowerCase().includes('scan')) finalTitle = `Scan Report: ${finalTitle}`;
+    if (recordType === 'Vaccination' && !finalTitle.toLowerCase().includes('vaccin')) finalTitle = `Vaccination: ${finalTitle}`;
+    if (recordType === 'Surgery/Procedure' && !finalTitle.toLowerCase().includes('surgery')) finalTitle = `Surgery: ${finalTitle}`;
+    if (recordType === 'Follow-up Appointment' && !finalTitle.toLowerCase().includes('follow-up')) finalTitle = `Follow-up Appointment: ${finalTitle}`;
+
+    addEncounter({ 
+      id: `ENC-${Date.now()}`, 
+      patientAadhaar: patient.aadhaar, 
+      date: dateStr, 
+      title: finalTitle, 
+      provider: doctor.name, 
+      facility: formData.facility, 
+      notes: formData.notes || `Added via ${recordType} module.` 
+    });
+
+    if (formData.diagnosis) {
+      addCondition({ id: `COND-${Date.now()}`, patientAadhaar: patient.aadhaar, title: formData.diagnosis, onset: dateStr, status: 'Active' });
+    }
+    if (formData.rxName) {
+      addMedication({ id: `MED-${Date.now()}`, patientAadhaar: patient.aadhaar, name: formData.rxName, dosage: formData.rxDosage || 'As directed', provider: doctor.name });
+    }
+    
+    setFormData({ title: '', notes: '', diagnosis: '', rxName: '', rxDosage: '', facility: formData.facility });
     onSuccess();
   };
 
+  const types = ['Clinical Consultation', 'Lab Report', 'Scan Report', 'Vaccination', 'Surgery/Procedure', 'Follow-up Appointment'];
+
   return (
-    <div className="bg-white border border-slate-200 rounded-sm shadow-sm">
+    <div className="bg-white border border-slate-200 rounded-sm shadow-sm animate-in fade-in duration-500">
       <div className="border-b border-slate-200 bg-slate-50 px-8 py-5">
-        <h2 className="text-lg font-bold text-slate-900">Record New Consultation</h2>
+        <h2 className="text-lg font-bold text-slate-900">Add Medical Record</h2>
       </div>
       <form onSubmit={handleSubmit} className="p-8 space-y-8">
-        <div className="space-y-4 border-b border-slate-100 pb-8">
-          <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-1.5">Facility / Hospital Context *</label>
-            <select value={formData.facility} onChange={e => setFormData({...formData, facility: e.target.value})} className="block w-full rounded-sm border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-900 bg-white">
-              {linkedHospitals.length === 0 && <option>Independent Practice</option>}
-              {linkedHospitals.map(h => <option key={h}>{h}</option>)}
-            </select>
+        
+        <div className="flex gap-2 border-b border-slate-100 pb-6 flex-wrap">
+          {types.map(t => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setRecordType(t)}
+              className={`px-4 py-2 text-xs font-bold rounded-sm transition-colors border ${
+                recordType === t ? 'bg-blue-900 text-white border-blue-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        <div className="space-y-5 border-b border-slate-100 pb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-semibold text-slate-900 mb-2">Facility / Hospital Context *</label>
+              <select value={formData.facility} onChange={e => setFormData({...formData, facility: e.target.value})} className="block w-full rounded-sm border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-900 bg-white">
+                {linkedHospitals.length === 0 && <option>Independent Practice</option>}
+                {linkedHospitals.map(h => <option key={h}>{h}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-900 mb-2">Record Title *</label>
+              <input required type="text" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="block w-full rounded-sm border border-slate-300 px-4 py-2.5 text-sm" placeholder={recordType === 'Clinical Consultation' ? "e.g. Chest pain evaluation" : `e.g. ${recordType} details`} />
+            </div>
           </div>
+          
           <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-1.5">Encounter Title *</label>
-            <input required type="text" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="block w-full rounded-sm border border-slate-300 px-4 py-2.5 text-sm" placeholder="e.g. Chest pain evaluation" />
+            <label className="block text-sm font-semibold text-slate-900 mb-2">Notes / Details {recordType === 'Clinical Consultation' && '*'}</label>
+            <textarea required={recordType === 'Clinical Consultation'} rows={4} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="block w-full rounded-sm border border-slate-300 px-4 py-2.5 text-sm leading-relaxed" placeholder="Detailed clinical notes, findings, or procedure description..." />
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-1.5">Clinical Notes *</label>
-            <textarea required rows={4} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="block w-full rounded-sm border border-slate-300 px-4 py-2.5 text-sm leading-relaxed" />
-          </div>
+
+          {(recordType === 'Clinical Consultation' || recordType === 'Follow-up Appointment') && (
+            <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label className="block text-sm font-semibold text-slate-900 mb-2">Add Diagnosis (Optional)</label>
+                <input type="text" value={formData.diagnosis} onChange={e => setFormData({...formData, diagnosis: e.target.value})} className="block w-full rounded-sm border border-slate-300 px-4 py-2.5 text-sm" placeholder="e.g. Hypertension" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-900 mb-2">Prescribe Medication (Optional)</label>
+                <input type="text" value={formData.rxName} onChange={e => setFormData({...formData, rxName: e.target.value})} className="block w-full rounded-sm border border-slate-300 px-4 py-2.5 text-sm" placeholder="e.g. Amlodipine 5mg" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-900 mb-2">Dosage Instructions</label>
+                <input type="text" value={formData.rxDosage} onChange={e => setFormData({...formData, rxDosage: e.target.value})} className="block w-full rounded-sm border border-slate-300 px-4 py-2.5 text-sm" placeholder="e.g. Once daily after meals" />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end pt-2">
           <button type="submit" className="px-6 py-3 text-sm font-bold text-white bg-blue-900 hover:bg-blue-800 transition-colors rounded-sm flex items-center">
-            <Plus className="mr-2 h-4 w-4" /> Save Record
+            <Plus className="mr-2 h-4 w-4" /> Save & Broadcast to Unified Record
           </button>
         </div>
       </form>
@@ -742,44 +964,119 @@ function RecordConsultationView({ patient, doctor, onSuccess }: { patient: Patie
   );
 }
 
-function UploadReportView({ patient, doctor, onSuccess }: { patient: Patient, doctor: Doctor, onSuccess: () => void }) {
-  const { addEncounter, hospitals } = useStore();
-  const linkedHospitals = doctor.hospitalIds.map(id => hospitals.find(x => x.hospitalId === id)?.name || "Independent Practice");
-  const [formData, setFormData] = useState({ type: 'Laboratory Report', notes: '', facility: linkedHospitals[0] || 'Independent Practice' });
-  const [isUploading, setIsUploading] = useState(false);
 
-  const handleUpload = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsUploading(true);
-    setTimeout(() => {
-      addEncounter({ id: `ENC-${Date.now()}`, patientAadhaar: patient.aadhaar, date: new Date().toISOString().split('T')[0], title: `${formData.type} Uploaded`, provider: doctor.name, facility: formData.facility, notes: formData.notes || 'Document attached.' });
-      setIsUploading(false);
-      onSuccess();
-    }, 1500);
+function DoctorHospitals({ doctor }: { doctor: Doctor }) {
+  const { hospitals, doctorRequests, addDoctorRequest } = useStore();
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Existing hospitals
+  const myHospitals = doctor.hospitalIds.map(id => hospitals.find(h => h.hospitalId === id)).filter(Boolean) as Hospital[];
+  
+  // Pending requests
+  const myPendingRequests = doctorRequests.filter(req => req.medicalId === doctor.medicalId && req.status === 'Pending');
+  
+  // Search for new hospitals
+  const searchResults = hospitals.filter(h => 
+    !doctor.hospitalIds.includes(h.hospitalId) && 
+    !myPendingRequests.some(req => req.hospitalId === h.hospitalId) &&
+    (h.name.toLowerCase().includes(searchQuery.toLowerCase()) || h.hospitalId.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  const handleSendRequest = (hospital: Hospital) => {
+    addDoctorRequest({
+      id: `REQ-${Date.now()}`,
+      medicalId: doctor.medicalId,
+      hospitalId: hospital.hospitalId,
+      doctorName: doctor.name,
+      hospitalName: hospital.name,
+      status: 'Pending',
+      date: new Date().toISOString()
+    });
+    setSearchQuery(""); // clear search
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-sm shadow-sm max-w-2xl mx-auto">
-      <div className="border-b border-slate-200 bg-slate-50 px-8 py-5"><h2 className="text-lg font-bold text-slate-900">Upload Report</h2></div>
-      <form onSubmit={handleUpload} className="p-8 space-y-6">
-        <div>
-          <label className="block text-sm font-semibold text-slate-900 mb-1.5">Facility Context</label>
-          <select value={formData.facility} onChange={e => setFormData({...formData, facility: e.target.value})} className="block w-full rounded-sm border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-900 bg-white">
-            {linkedHospitals.map(h => <option key={h}>{h}</option>)}
-          </select>
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-900">My Hospitals</h1>
+        <p className="text-sm text-slate-600 mt-1">Manage your hospital affiliations and send join requests.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded-sm shadow-sm overflow-hidden">
+            <div className="border-b border-slate-200 bg-slate-50 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-slate-900 flex items-center"><Building2 className="mr-2 h-4 w-4 text-blue-900" /> Current Affiliations</h2>
+            </div>
+            <div className="divide-y divide-slate-100 p-2">
+              {myHospitals.length === 0 ? (
+                <div className="p-6 text-center text-sm text-slate-500">No hospital affiliations yet.</div>
+              ) : (
+                myHospitals.map(h => (
+                  <div key={h.hospitalId} className="p-4 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">{h.name}</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">{h.address}</p>
+                    </div>
+                    <span className="text-xs font-mono font-semibold text-blue-900 bg-blue-50 px-2 py-1 rounded-sm border border-blue-100">{h.hospitalId}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {myPendingRequests.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-sm shadow-sm overflow-hidden">
+              <div className="border-b border-slate-200 bg-amber-50 px-6 py-4 flex items-center justify-between">
+                <h2 className="text-base font-semibold text-amber-900 flex items-center"><Clock className="mr-2 h-4 w-4 text-amber-600" /> Pending Requests</h2>
+              </div>
+              <div className="divide-y divide-slate-100 p-2">
+                {myPendingRequests.map(req => (
+                  <div key={req.id} className="p-4 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">{req.hospitalName}</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">Requested on {new Date(req.date).toLocaleDateString()}</p>
+                    </div>
+                    <span className="text-[10px] uppercase font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded-sm tracking-wider">Pending</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-        <div>
-          <label className="block text-sm font-semibold text-slate-900 mb-1.5">Document Category</label>
-          <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="block w-full rounded-sm border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-900 bg-white">
-            <option>Laboratory Report</option><option>Radiology / Scan Report</option>
-          </select>
+
+        <div className="bg-white border border-slate-200 rounded-sm shadow-sm p-6 h-fit">
+          <h2 className="text-base font-semibold text-slate-900 mb-4 flex items-center"><Plus className="mr-2 h-4 w-4 text-blue-900" /> Add New Hospital</h2>
+          <div className="relative mb-4">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+              <Search className="h-4 w-4 text-slate-400" />
+            </div>
+            <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="block w-full rounded-sm border border-slate-300 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-blue-900 focus:outline-none focus:ring-1 focus:ring-blue-900 transition-colors" placeholder="Search registered hospitals..." />
+          </div>
+
+          {searchQuery.length > 0 && (
+            <div className="border border-slate-200 rounded-sm overflow-hidden">
+              <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
+                {searchResults.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-slate-500">No matching hospitals found.</div>
+                ) : (
+                  searchResults.map(h => (
+                    <div key={h.hospitalId} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">{h.name}</h4>
+                        <p className="text-xs text-slate-500 font-mono mt-0.5">ID: {h.hospitalId}</p>
+                      </div>
+                      <button onClick={() => handleSendRequest(h)} className="flex-shrink-0 px-3 py-1.5 text-xs font-semibold text-blue-900 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors rounded-sm text-center">
+                        Send Request
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
-        <div className="flex justify-end border-t border-slate-200 pt-6">
-          <button type="submit" disabled={isUploading} className="px-6 py-3 text-sm font-bold text-white bg-blue-900 hover:bg-blue-800 transition-colors rounded-sm">
-            {isUploading ? 'Uploading...' : 'Upload & Attach'}
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
   );
 }
